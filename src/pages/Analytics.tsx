@@ -341,7 +341,7 @@ const Analytics = () => {
                   {channelData.map((item, i) => (
                     <Card key={i} className="bg-muted/50">
                       <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground">{item.label}</p>
+                        <p className="text-xs text-muted-foreground">{item.label}</p>  {/* name */}
                         <p className="text-lg font-medium mt-1">{item.value}%</p>
                       </CardContent>
                     </Card>

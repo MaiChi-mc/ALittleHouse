@@ -10,6 +10,7 @@ import RoomManagement from "./pages/RoomManagement";
 import Messages from "./pages/Messages";
 import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -20,10 +21,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* <Route path="/" element={<Login/>} /> */}
           <Route path="/" element={<Dashboard />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/room-management" element={<RoomManagement />} />
           <Route path="/messages" element={<Messages />} />
+          <Route path="/email" element={<Messages />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

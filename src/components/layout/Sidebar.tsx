@@ -18,7 +18,7 @@ const Sidebar = () => {
     <div className="bg-sidebar h-screen w-[250px]">
       <div className="flex items-center p-4 mb-6">
         <Link to="/" className="text-white font-bold text-xl">
-          HotelPro
+          A Little House
         </Link>
       </div>
       

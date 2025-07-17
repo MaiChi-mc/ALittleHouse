@@ -16,7 +16,7 @@ const Navbar = () => {
       <div>
         <h1 className="text-xl font-semibold text-gray-800">
           {/* This will dynamically show the current page title, but for now it's static */}
-          Welcome to HotelPro
+          Welcome to A Little House
         </h1>
         <p className="text-sm text-gray-500">Manage your hotel with ease</p>
       </div>
@@ -40,7 +40,9 @@ const Navbar = () => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuLabel>
+              My Account
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>
               Profile

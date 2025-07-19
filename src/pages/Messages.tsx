@@ -201,7 +201,13 @@ useEffect(() => {
                       return (
                         <div key={index} className={`flex ${isHotel ? "justify-end" : "justify-start"}`}>
                           <div className={`max-w-[70%] ${isHotel ? "bg-hotel-500 text-white" : "bg-secondary"} rounded-lg px-4 py-2`}>
-                            <p dangerouslySetInnerHTML={{ __html: (message.snippet?.split("Vào Th")[0].trim() || message.subject) }} />
+                            <p
+                              dangerouslySetInnerHTML={{
+                                __html:
+                                  (message.snippet?.replace(/Vào.*?đã viết:.*/is, '').trim()) ||
+                                  message.subject,
+                              }}
+                            />
                             <p className={`text-xs ${isHotel ? "text-hotel-100" : "text-muted-foreground"} text-right mt-1`}>
                               {new Date(message.date).toLocaleTimeString()}
                             </p>

@@ -26,10 +26,12 @@ const Login = () => {
       const { token, role, user_email } = response.data;
       const decodedToken = JSON.parse(atob(token.split('.')[1]));
 
+      console.log("Response from login API: ", response.data); // Log dữ liệu trả về
+
       // Lưu token và role vào localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('role', decodedToken.role);  
-      localStorage.setItem('email', response.data.user_email);
+      localStorage.setItem('email', user_email);
 
       // Điều hướng người dùng đến trang Dashboard
       navigate('/');

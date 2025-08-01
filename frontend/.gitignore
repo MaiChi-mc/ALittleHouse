@@ -24,5 +24,6 @@ dist-ssr
 *.sw?
 
 
-node_modules/
-.env
+# Ignore environment and sensitive files
+backend/.env
+backend/routes/oauth.js

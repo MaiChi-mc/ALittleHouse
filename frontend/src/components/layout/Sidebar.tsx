@@ -26,7 +26,7 @@ const Sidebar = ({ userRole }: { userRole: string | null }) => {
   return (
     <div className="bg-sidebar h-screen w-[250px]">
       <div className="flex items-center p-4 mb-6">
-        <Link to="/" className="text-white font-bold text-xl">
+        <Link to="/dashboard" className="text-white font-bold text-xl">
           A Little House
         </Link>
       </div>

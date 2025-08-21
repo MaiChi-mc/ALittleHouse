@@ -8,6 +8,7 @@ require('dotenv').config(); // tải biến môi trường từ file .env
 const gmailRoutes = require('./routes/gmail');
 const oauthRoutes = require('./routes/oauth');
 const authRouter = require('./routes/auth'); 
+const cronJobsRouter = require('./routes/cronJobs'); // Import cron jobs
 
 const app = express();
 
@@ -28,6 +29,7 @@ session({
 app.use('/api/auth', authRouter);
 app.use('/api', gmailRoutes);
 app.use('/api', oauthRoutes);
+app.use('/api/cron-jobs', cronJobsRouter); // Kết nối cron jobs
 
 // Cấu hình cổng và chạy server
 const PORT = process.env.PORT || 8080;

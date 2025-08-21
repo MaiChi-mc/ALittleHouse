@@ -1,102 +1,223 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Hotel, ChartBar, ArrowUp, ArrowDown } from "lucide-react";
+import { Users } from "lucide-react";
 import MainLayout from "@/components/layout/MainLayout";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
+type Room = {
+  room_id: number;
+  room_number: string;
+  floor: number;
+  status: "Available" | "Occupied" | "Cleaning" | "Maintenance";
+};
+
+// màu & icon cho trạng thái
+const statusConfig: Record<
+  Room["status"],
+  { color: string; text: string }
+> = {
+  Available: { color: "bg-[#6dabe8]", text: "Trống" },
+  Occupied: { color: "bg-[#d19ab4]", text: "Có khách" },
+  Cleaning: { color: "bg-orange-500", text: "Dọn phòng" },
+  Maintenance: { color: "bg-gray-500", text: "Bảo trì" },
+};
+
+// ô hiển thị phòng
+const RoomBox = ({ room }: { room: Room }) => {
+  const cfg = statusConfig[room.status];
+  return (
+    <div
+      className={`w-20 h-20 flex flex-col items-center justify-center rounded-lg text-white shadow-md ${cfg.color}`}
+    >
+      <span className="font-bold">{room.room_number}</span>
+      <span className="text-xs">{cfg.text}</span>
+    </div>
+  );
+};
+
 const Dashboard = () => {
-  const userRole = localStorage.getItem('role');
-  // Mock Data - removed Total Bookings and Unread Messages
-  const stats = [
-    { title: "Occupied Rooms", value: "24", icon: Hotel, trend: "up", percent: "4%" },
-    { title: "Today's Guests", value: "18", icon: Users, trend: "down", percent: "2%" },
-  ];
+  const navigate = useNavigate();
+  const userRole = localStorage.getItem("role");
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [checkIns, setCheckIns] = useState<any[]>([]);
+  const [checkOuts, setCheckOuts] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+
+  // Giữ full danh sách hoạt động
+  const [allActivities, setAllActivities] = useState<any[]>([]);
+
+  // Vẫn dùng để render phần đang thấy
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [visibleCount, setVisibleCount] = useState(5);
+
+  useEffect(() => {
+    const fetchBookings = async () => {
+      try {
+        const [roomsRes, bookingsRes, activityLogsRes] = await Promise.all([
+          fetch("http://localhost:8080/api/auth/rooms"),
+          fetch("http://localhost:8080/api/auth/bookings/all"),
+          fetch("http://localhost:8080/api/auth/activity-logs"),
+        ]);
+
+        if (!roomsRes.ok || !bookingsRes.ok || !activityLogsRes.ok) {
+          throw new Error(`HTTP error: ${roomsRes.status}, ${bookingsRes.status}, ${activityLogsRes.status}`);
+        }
+
+        // Parse JSON
+        const [roomsData, bookingsData, activityLogsData] = await Promise.all([
+          roomsRes.json(),
+          bookingsRes.json(),
+          activityLogsRes.json(),
+        ]);
+
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const today = new Date();
+        const todayStr = today.toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+        const toYMD = (v: any) => {
+          if (!v) return null;
+          if (typeof v === "string") return v.slice(0, 10);
+          if (v instanceof Date) {
+            return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+          }
+          return null;
+        };
+
+        const toDateTime = (v: any) => {
+          if (!v) return null;
+          if (v instanceof Date) return v;
+          if (typeof v === "string") return new Date(v.replace(" ", "T"));
+          return null;
+        };
+
+        const isCronJob = (b: any) => !b.booking_source || b.booking_source === "System";
+
+        // CHUẨN HÓA DỮ LIỆU BOOKING
+        const data = (bookingsData as any[]).map((b) => ({
+          ...b,
+          check_in_str: toYMD(b.check_in),
+          check_out_str: toYMD(b.check_out),
+        }));
+
+        setBookings(data);
+
+        // Hôm nay check-in
+        setCheckIns(
+          data.filter(
+            (b) =>
+              b.check_in_str === todayStr &&
+              ["Confirmed", "Checked-in"].includes(b.booking_status)
+          )
+        );
+
+        // Hôm nay check-out
+        setCheckOuts(
+          data.filter(
+            (b) =>
+              b.check_out_str === todayStr &&
+              ["Confirmed", "Checked-in", "Checked-out"].includes(b.booking_status)
+          )
+        );
+
+        // Hoạt động gần đây
+        const activitiesFull = (activityLogsData as any[])
+          .filter((log) => log.log_id)
+          .sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime())
+          .map((log) => {
+            const timeValue = toDateTime(log.performed_at);
+
+            // Thêm booking_source vào text
+            const text = `${log.action_type} - ${log.guest_name || 'Khách không xác định'} booking for Room ${log.room_number} (${log.booking_status}) ${log.booking_source ? `+ ${log.booking_source}` : ''}`;
+
+            // Ghép user_name với booking_source
+            const user = log.user_name
+              ? log.booking_source
+                ? `${log.booking_source} + ${log.user_name} `
+                : log.user_name
+              : log.performed_by || "System";
+
+            return {
+              time: timeValue
+                ? timeValue.toLocaleString("vi-VN", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+                : "N/A",
+              text,
+              user,
+            };
+          });
+
+        setAllActivities(activitiesFull);
+
+        // MERGE BOOKINGS -> ROOM STATUS
+        const mergedRooms = roomsData.map((room: any) => {
+          const activeBooking = data.find((b: any) => {
+            const ci = new Date(b.check_in);
+            const co = new Date(b.check_out);
+            return (
+              b.room_id === room.room_id &&
+              ["Confirmed", "Checked-in"].includes(b.booking_status) &&
+              ci <= today &&
+              co > today
+            );
+          });
+
+          let status: Room["status"] = "Available";
+
+          if (activeBooking) {
+            if (activeBooking.booking_status === "Checked-in") {
+              status = "Occupied";
+            } else if (
+              activeBooking.booking_status === "Confirmed" &&
+              activeBooking.check_in_str === todayStr
+            ) {
+              status = "Occupied"; // check-in hôm nay
+            }
+          }
+
+          return {
+            ...room,
+            status,
+          };
+        });
+
+        setRooms(mergedRooms);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+      }
+    };
+
+    fetchBookings();
+  }, []);
+
+  // Khi visibleCount hoặc allActivities thay đổi
+  useEffect(() => {
+    setRecentActivities(allActivities.slice(0, visibleCount));
+  }, [allActivities, visibleCount]);
+
+  // group theo floor
+  const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
+
 
   return (
     <MainLayout userRole={userRole}>
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          {stats.map((stat, i) => (
-            <Card key={i} className="shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className="h-4 w-4 text-hotel-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <div className="flex items-center text-xs text-muted-foreground mt-1">
-                  {stat.trend === "up" ? (
-                    <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
-                  ) : (
-                    <ArrowDown className="mr-1 h-3 w-3 text-red-500" />
-                  )}
-                  <span className={stat.trend === "up" ? "text-green-500" : "text-red-500"}>
-                    {stat.percent}
-                  </span>
-                  <span className="ml-1">from last week</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="col-span-1 lg:col-span-2 shadow-sm">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Room Occupancy Overview</CardTitle>
-              <Tabs defaultValue="week">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="day">Day</TabsTrigger>
-                  <TabsTrigger value="week">Week</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80 flex items-center justify-center">
-                <div className="w-full h-full flex flex-col justify-center">
-                  <div className="text-center text-muted-foreground mb-8">
-                    <ChartBar className="mx-auto h-16 w-16 opacity-30" />
-                    <p className="mt-2">Room Occupancy Chart</p>
-                    <p className="text-sm">(Sample data displayed)</p>
-                  </div>
-                  <div className="space-y-5">
-                    {["Standard Rooms", "Premium Rooms", "Suites"].map((room, i) => (
-                      <div key={i} className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium">{room}</span>
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {[74, 82, 65][i]}%
-                          </span>
-                        </div>
-                        <Progress value={[74, 82, 65][i]} className="h-2" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="shadow-sm">
-            <CardHeader>
-              <CardTitle>Recent Activities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {[
-                  { time: "09:15 AM", text: "New booking received for Room 203", user: "Online" },
-                  { time: "08:42 AM", text: "Guest John checked-in to Room 104", user: "Front Desk" },
-                  { time: "Yesterday", text: "Room 305 maintenance completed", user: "Maintenance" },
-                  { time: "Yesterday", text: "New message from Airbnb", user: "Channel Manager" },
-                  { time: "2 days ago", text: "Monthly revenue report generated", user: "System" },
-                ].map((item, i) => (
+        {/* Recent Activities */}
+        <Card className="shadow-lg">
+          <CardHeader className="text-[#af3c6a]">
+            <CardTitle>Hoạt động gần đây</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentActivities.length > 0 ? (
+                recentActivities.map((item, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div className="h-2 w-2 mt-2 rounded-full bg-hotel-500"></div>
+                    <div className="h-2 w-2 mt-2 rounded-full bg-[#af3c6a]"></div>
                     <div>
                       <p className="text-sm">{item.text}</p>
                       <div className="flex items-center gap-2 mt-1">
@@ -106,111 +227,133 @@ const Dashboard = () => {
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-              
-              <div className="mt-4 pt-4 border-t">
-                <Link to="/activities" className="text-sm text-hotel-500 hover:underline">
-                  View all activities
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-        
-        <div className="grid gap-6 md:grid-cols-2">
-          <Card className="shadow-sm border-l-4 border-l-blue-500">
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Không có hoạt động gần đây</p>
+              )}
+
+              {visibleCount < allActivities.length && (
+                <>
+                  <hr />
+                  <Button onClick={() => setVisibleCount((prev) => prev + 5)} variant="outline"
+                    className="text-white bg-[#d19ab4] hover:text-[#af3c6a] hover:bg-white hover:border-[#d19ab4]">
+                    Xem thêm hoạt động
+                  </Button>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Today's Check-ins & Check-outs */}
+        <div className="grid gap-6 md:grid-cols-2 ">
+          {/* Check-ins */}
+          <Card className="shadow-lg border-l-4 border-l-[#da4c8e]">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-blue-500"></div>
-                Today's Check-ins
+                <div className="h-3 w-3 rounded-full bg-[#da4c8e]"></div>
+                Check-ins hôm nay
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { name: "John Doe", room: "101", time: "14:00", status: "Confirmed" },
-                { name: "Emily Wong", room: "204", time: "15:30", status: "Pending" },
-                { name: "Michael Smith", room: "305", time: "12:00", status: "Confirmed" },
-              ].map((guest, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-blue-600" />
+              {checkIns.length > 0 ? (
+                checkIns.map((guest, i) => (
+                  <div
+                    key={i}
+                    onClick={() => navigate(`/room-management?room_id=${guest.room_id}`)}
+                    className="flex items-center justify-between p-3 bg-[#ffeff6] hover:bg-[#f1c9db] hover:text-[#e31676] rounded-lg border cursor-pointer hover:scale-105 transition-transform duration-200">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-[#e08ab2] flex items-center justify-center">
+                        <Users className="h-5 w-5 text-white " />
+                      </div>
+                      <div>
+                        <p className="font-medium">{guest.guest_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Phòng {guest.room_number}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{guest.name}</p>
-                      <p className="text-sm text-muted-foreground">Room {guest.room} • {guest.time}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 text-sm rounded-full font-medium ${
-                      guest.status === "Confirmed" 
-                        ? "bg-green-100 text-green-700" 
-                        : "bg-yellow-100 text-yellow-700"
-                    }`}>
-                      {guest.status}
+                    <span className="px-3 py-1 text-sm rounded-full font-medium bg-[#da4c8e] text-white">
+                      {guest.booking_status}
                     </span>
-                    <Button size="sm" variant="outline" className="ml-2">
-                      Process
-                    </Button>
                   </div>
-                </div>
-              ))}
-              
-              <div className="pt-4 border-t">
-                <Link to="/bookings" className="text-hotel-500 hover:underline font-medium">
-                  View all bookings →
-                </Link>
-              </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Không có check-in hôm nay</p>
+              )}
             </CardContent>
           </Card>
-          
-          <Card className="shadow-sm border-l-4 border-l-orange-500">
+
+          {/* Check-outs */}
+          <Card className="shadow-xl border-l-4 border-l-[#529ae3]">
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-orange-500"></div>
-                Today's Check-outs
+                <div className="h-3 w-3 rounded-full bg-[#6dabe8]"></div>
+                Check-outs hôm nay
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {[
-                { name: "Jane Williams", room: "203", time: "11:00", status: "Processing" },
-                { name: "Robert Chen", room: "105", time: "10:00", status: "Completed" },
-                { name: "Sarah Adams", room: "402", time: "12:00", status: "Processing" },
-              ].map((guest, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-orange-100 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-orange-600" />
+              {checkOuts.length > 0 ? (
+                checkOuts.map((guest, i) => (
+                  <div
+                    key={i}
+                    onClick={() => navigate(`/room-management?room_id=${guest.room_id}`)}
+                    className="flex items-center justify-between p-3 bg-[#e9f2fc] hover:bg-[#cbe5ff] hover:text-[#2a8ef2] rounded-lg border cursor-pointer hover:scale-105 transition-transform duration-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-full bg-[#6dabe8] flex items-center justify-center">
+                        <Users className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-medium">{guest.guest_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Phòng {guest.room_number}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{guest.name}</p>
-                      <p className="text-sm text-muted-foreground">Room {guest.room} • {guest.time}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1 text-sm rounded-full font-medium ${
-                      guest.status === "Completed" 
-                        ? "bg-green-100 text-green-700" 
-                        : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {guest.status}
+                    <span className="px-3 py-1 text-sm rounded-full font-medium bg-[#2a8ef2] text-white">
+                      {guest.booking_status}
                     </span>
-                    <Button size="sm" variant="outline" className="ml-2">
-                      Process
-                    </Button>
                   </div>
-                </div>
-              ))}
-              
-              <div className="pt-4 border-t">
-                <Link to="/bookings" className="text-hotel-500 hover:underline font-medium">
-                  View all bookings →
-                </Link>
-              </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">Không có check-outs hôm nay</p>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Corridor View */}
+        {/* Corridor View */}
+        <Card className="shadow-xl">
+          <CardHeader className="text-[#af3c6a]">
+            <CardTitle>Sơ đồ trạng thái phòng</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-5">
+              {floors.map((floor) => {
+                const floorRooms = rooms.filter((r) => r.floor === floor);
+                return (
+                  <div key={floor} className="flex flex-col items-center">
+                    <h2 className="text-base font-semibold mb-4">Tầng {floor}</h2>
+                    <div className="flex flex-col items-center gap-4">
+                      {floorRooms.map((room) => (
+                        <div
+                          key={room.room_id}
+                          onClick={() => navigate(`/room-management?room_id=${room.room_id}`)}
+                          className="cursor-pointer hover:scale-125 transition-transform duration-200"
+                        >
+                          <RoomBox room={room} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
       </div>
     </MainLayout>
   );

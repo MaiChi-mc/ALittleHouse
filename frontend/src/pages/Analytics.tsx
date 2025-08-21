@@ -1,279 +1,703 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  ChartBar, 
-  ArrowUp, 
-  ArrowDown, 
-  Hotel, 
-  Calendar, 
-  Users
-} from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-} from "recharts";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { ArrowUp, ArrowDown, } from "lucide-react";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
+import { Button } from "@/components/ui/button";
+import * as XLSX from "xlsx";
+
+// ===== Kiểu dữ liệu gốc từ API (giữ nguyên tiếng Anh để không vướng lỗi union type) =====
+type Room = {
+  room_id: number;
+  room_number: string;
+  room_type: "A" | "B" | "C";
+  floor: number;
+  price: number;
+  status: "Available" | "Occupied" | "Cleaning" | "Maintenance";
+  created_at: string;
+  updated_at: string;
+};
+
+type Booking = {
+  booking_id: number;
+  guest_name: string;
+  guest_id: string | null;
+  phone_number: string | null;
+  room_id: number;
+  check_in: string;   // "YYYY-MM-DD"
+  check_out: string;  // "YYYY-MM-DD"
+  booking_source: "Facebook" | "Booking.com" | "Agoda" | "Airbnb" | "Walk-in" | "Zalo";
+  booking_status: "Confirmed" | "Cancelled" | "Checked-in" | "Checked-out";
+  amount_received: number | null;
+  booking_date: string;
+  created_at: string;
+  updated_at: string;
+};
+
+// ===== Bảng dịch chỉ dùng cho HIỂN THỊ =====
+const bookingSourceMap: Record<Booking["booking_source"], string> = {
+  Facebook: "Facebook",
+  "Booking.com": "Booking.com",
+  Agoda: "Agoda",
+  Airbnb: "Airbnb",
+  "Walk-in": "Khách vãng lai",
+  Zalo: "Zalo",
+};
+
+// Tháng hiển thị trên FE bằng tiếng Việt
+const MONTHS = [
+  "Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12"
+] as const;
+
+const toLocalDate = (s: string) => {
+  // Chuyển "YYYY-MM-DD" -> Date local để tính ngày/đêm chính xác (an toàn với chuỗi có cả thời gian)
+  const parts = s?.split(/[-T:\s]/).map(Number) ?? [];
+  const y = parts[0] ?? new Date().getFullYear();
+  const m = (parts[1] ?? 1) - 1;
+  const d = parts[2] ?? 1;
+  return new Date(y, m, d);
+};
+
+const startOfMonth = (y: number, mIndex: number) => new Date(y, mIndex, 1);
+const endOfMonthExclusive = (y: number, mIndex: number) => new Date(y, mIndex + 1, 1);
+const daysBetween = (a: Date, b: Date) => Math.max(0, Math.round((b.getTime() - a.getTime()) / (24 * 3600 * 1000)));
+const clampRangeOverlapNights = (aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) => {
+  // Khoảng [aStart, aEnd) & [bStart, bEnd) theo số đêm
+  const s = new Date(Math.max(aStart.getTime(), bStart.getTime()));
+  const e = new Date(Math.min(aEnd.getTime(), bEnd.getTime()));
+  return Math.max(0, daysBetween(s, e));
+};
 
 const Analytics = () => {
-    const userRole = localStorage.getItem('role');
-  const [period, setPeriod] = useState("month");
+  const userRole = typeof window !== "undefined" ? localStorage.getItem("role") : null;
+  const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
 
-  // Revenue data for the last 12 months
-  const revenueData = [
-    { month: "Jan", revenue: 12500, roomRevenue: 9500, fbRevenue: 2100, services: 900 },
-    { month: "Feb", revenue: 14200, roomRevenue: 11000, fbRevenue: 2300, services: 900 },
-    { month: "Mar", revenue: 16800, roomRevenue: 13200, fbRevenue: 2600, services: 1000 },
-    { month: "Apr", revenue: 18500, roomRevenue: 14500, fbRevenue: 2800, services: 1200 },
-    { month: "May", revenue: 20100, roomRevenue: 15800, fbRevenue: 3000, services: 1300 },
-    { month: "Jun", revenue: 15942, roomRevenue: 12450, fbRevenue: 2380, services: 1112 },
-    { month: "Jul", revenue: 22000, roomRevenue: 17200, fbRevenue: 3200, services: 1600 },
-    { month: "Aug", revenue: 24500, roomRevenue: 19000, fbRevenue: 3800, services: 1700 },
-    { month: "Sep", revenue: 21800, roomRevenue: 17000, fbRevenue: 3200, services: 1600 },
-    { month: "Oct", revenue: 19200, roomRevenue: 15000, fbRevenue: 2900, services: 1300 },
-    { month: "Nov", revenue: 17500, roomRevenue: 13500, fbRevenue: 2700, services: 1300 },
-    { month: "Dec", revenue: 23000, roomRevenue: 18000, fbRevenue: 3500, services: 1500 },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [rRes, bRes] = await Promise.all([
+          fetch("http://localhost:8080/api/auth/rooms"),
+          fetch("http://localhost:8080/api/auth/bookings/all"),
+        ]);
+        const [rData, bData] = await Promise.all([rRes.json(), bRes.json()]);
+        setRooms(Array.isArray(rData) ? (rData as Room[]) : []);
+        setBookings(Array.isArray(bData) ? (bData as Booking[]) : []);
 
-  // Daily revenue trend for current month
-  const dailyRevenueData = [
-    { day: "1", revenue: 850 }, { day: "2", revenue: 920 }, { day: "3", revenue: 780 },
-    { day: "4", revenue: 1200 }, { day: "5", revenue: 1350 }, { day: "6", revenue: 1180 },
-    { day: "7", revenue: 1420 }, { day: "8", revenue: 980 }, { day: "9", revenue: 1100 },
-    { day: "10", revenue: 1250 }, { day: "11", revenue: 1380 }, { day: "12", revenue: 1150 },
-    { day: "13", revenue: 1320 }, { day: "14", revenue: 1450 }, { day: "15", revenue: 1280 },
-    { day: "16", revenue: 1350 }, { day: "17", revenue: 1200 }, { day: "18", revenue: 1100 },
-  ];
+      } catch (e) {
+        console.error(e);
+        setRooms([]);
+        setBookings([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
-  // Occupancy data
-  const occupancyData = [
-    { month: "Jan", occupancy: 65 }, { month: "Feb", occupancy: 72 },
-    { month: "Mar", occupancy: 78 }, { month: "Apr", occupancy: 85 },
-    { month: "May", occupancy: 88 }, { month: "Jun", occupancy: 78 },
-    { month: "Jul", occupancy: 92 }, { month: "Aug", occupancy: 95 },
-    { month: "Sep", occupancy: 87 }, { month: "Oct", occupancy: 82 },
-    { month: "Nov", occupancy: 75 }, { month: "Dec", occupancy: 89 },
-  ];
+  // Lọc khách theo tháng
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [rRes, bRes] = await Promise.all([
+          fetch("http://localhost:8080/api/auth/rooms"),
+          fetch("http://localhost:8080/api/auth/bookings/all"),
+        ]);
+        const [rData, bData] = await Promise.all([rRes.json(), bRes.json()]);
 
-  // Room type revenue distribution
-  const roomTypeData = [
-    { name: "Standard", value: 8500, color: "#3B82F6" },
-    { name: "Deluxe", value: 2850, color: "#10B981" },
-    { name: "Suite", value: 1100, color: "#F59E0B" },
-  ];
+        const roomsData = Array.isArray(rData) ? (rData as Room[]) : [];
+        const bookingsData = Array.isArray(bData) ? (bData as Booking[]) : [];
 
-  // Booking channels distribution
-  const channelData = [
-    { name: "Direct", value: 35, color: "#8B5CF6" },
-    { name: "Booking.com", value: 32, color: "#3B82F6" },
-    { name: "Airbnb", value: 18, color: "#10B981" },
-    { name: "Agoda", value: 15, color: "#F59E0B" },
-  ];
+        setRooms(roomsData);
+        setBookings(bookingsData);
 
+        // --- Lọc booking theo tháng được chọn ---
+        // --- Lọc booking theo khoảng thời gian (check_in - check_out) ---
+        if (!bookingsData || bookingsData.length === 0) {
+          setFilteredBookings([]);
+        } else {
+          const month = selectedMonth.getMonth(); // 0-11
+          const year = selectedMonth.getFullYear();
+
+          const startOfMonth = new Date(year, month, 1);
+          const endOfMonth = new Date(year, month + 1, 0); // ngày cuối tháng
+
+          const filtered = bookingsData.filter((b) => {
+            const checkIn = new Date(b.check_in);
+            const checkOut = new Date(b.check_out);
+
+            // booking giao với khoảng thời gian của tháng được chọn
+            return checkOut >= startOfMonth && checkIn <= endOfMonth;
+          });
+
+          setFilteredBookings(filtered);
+        }
+      } catch (e) {
+        console.error(e);
+        setRooms([]);
+        setBookings([]);
+        setFilteredBookings([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [selectedMonth]); // chạy lại khi đổi tháng
+
+
+  // ---- Chuẩn hoá & giả định tính doanh thu ----
+  // - amount_received null => fallback: đơn giá phòng * số đêm (theo rooms.price).
+  // - Phân bổ doanh thu theo số đêm (prorate) để ra daily + monthly chính xác.
+  const validBookings = useMemo(() => {
+    const roomMap = new Map(rooms.map(r => [r.room_id, r]));
+    return bookings
+      .filter(b => b.booking_status !== "Cancelled")
+      .map(b => {
+        const r = roomMap.get(b.room_id);
+        const nights = Math.max(0, daysBetween(toLocalDate(b.check_in), toLocalDate(b.check_out)));
+        const fallback = r ? r.price * nights : 0;
+        const amount = (b.amount_received ?? fallback) || 0;
+        return { ...b, _nights: nights, _amount: amount, _room: r || null } as Booking & {
+          _nights: number; _amount: number; _room: Room | null;
+        };
+      })
+      .filter(b => b._nights > 0);
+  }, [bookings, rooms]);
+
+  // ---- Khoảng thời gian hiện tại ----
+  const year = selectedMonth.getFullYear();
+  const monthIndex = selectedMonth.getMonth();
+
+  // ---- Doanh thu 12 tháng ----
+  const revenueData = useMemo(() => {
+    const base = Array.from({ length: 12 }, (_, i) => ({
+      month: MONTHS[i],
+      revenue: 0,
+      roomRevenue: 0,
+      fbRevenue: 0,
+      services: 0,
+    }));
+    validBookings.forEach(b => {
+      for (let m = 0; m < 12; m++) {
+        const mStart = startOfMonth(selectedMonth.getFullYear(), m);
+        const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), m);
+        const nightsInMonth = clampRangeOverlapNights(
+          toLocalDate(b.check_in),
+          toLocalDate(b.check_out),
+          mStart,
+          mEnd
+        );
+        if (nightsInMonth > 0 && b._nights > 0) {
+          const portion = (b._amount / b._nights) * nightsInMonth;
+          base[m].roomRevenue += portion;
+          base[m].revenue += portion;
+        }
+      }
+    });
+    return base.map(x => ({
+      ...x,
+      revenue: Math.round(x.revenue),
+      roomRevenue: Math.round(x.roomRevenue),
+      fbRevenue: Math.round(x.fbRevenue),
+      services: Math.round(x.services),
+    }));
+  }, [validBookings, year]);
+
+  // ---- Công suất 12 tháng ----
+  const occupancyData = useMemo(() => {
+    const totalRooms = rooms.length || 1;
+    return Array.from({ length: 12 }, (_, m) => {
+      const mStart = startOfMonth(selectedMonth.getFullYear(), m);
+      const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), m);
+      const dim = daysBetween(mStart, mEnd);
+      let occupiedNights = 0;
+
+      validBookings.forEach(b => {
+        occupiedNights += clampRangeOverlapNights(
+          toLocalDate(b.check_in),
+          toLocalDate(b.check_out),
+          mStart,
+          mEnd
+        );
+      });
+
+      const denominator = totalRooms * dim || 1;
+      const occupancy = (occupiedNights / denominator) * 100;
+      return { month: MONTHS[m], occupancy: Math.round(occupancy * 10) / 10 };
+    });
+  }, [validBookings, rooms, selectedMonth.getFullYear()]);
+
+  // ---- Doanh thu theo loại phòng (tháng hiện tại) ----
+  const roomTypeData = useMemo(() => {
+    const typeSum = { A: 0, B: 0, C: 0 } as Record<"A" | "B" | "C", number>;
+    const mStart = startOfMonth(selectedMonth.getFullYear(), monthIndex);
+    const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), monthIndex);
+
+    validBookings.forEach(b => {
+      const r = (b as any)._room as Room | null;
+      if (!r) return;
+      const nightsInMonth = clampRangeOverlapNights(
+        toLocalDate(b.check_in),
+        toLocalDate(b.check_out),
+        mStart, mEnd
+      );
+      if (nightsInMonth === 0) return;
+      const portion = ((b as any)._amount * nightsInMonth) / (b as any)._nights;
+      typeSum[r.room_type] += portion;
+    });
+
+    const items = [
+      { name: "A", value: Math.round(typeSum.A) },
+      { name: "B", value: Math.round(typeSum.B) },
+      { name: "C", value: Math.round(typeSum.C) },
+    ];
+    const colorMap: Record<string, string> = { A: "#bc627c", B: "#fec2b8", C: "#a0c9c3" };
+    return items.map(x => ({ ...x, color: colorMap[x.name] }));
+  }, [validBookings, selectedMonth.getFullYear(), monthIndex]);
+
+  // ---- Tỷ trọng kênh đặt (tháng hiện tại) ----
+  const channelData = useMemo(() => {
+    const mStart = startOfMonth(selectedMonth.getFullYear(), monthIndex);
+    const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), monthIndex);
+    const counts = new Map<string, number>();
+
+    validBookings.forEach(b => {
+      const nightsInMonth = clampRangeOverlapNights(
+        toLocalDate(b.check_in),
+        toLocalDate(b.check_out),
+        mStart, mEnd
+      );
+      if (nightsInMonth === 0) return;
+      counts.set(b.booking_source, (counts.get(b.booking_source) || 0) + nightsInMonth);
+    });
+
+    const total = Array.from(counts.values()).reduce((a, c) => a + c, 0) || 1;
+    const colorMap: Record<string, string> = {
+      "Walk-in": "#8B5CF6",
+      "Booking.com": "#3B82F6",
+      "Airbnb": "#ff5a5f",
+      "Agoda": "#F59E0B",
+      "Facebook": "#10B981",
+      "Zalo": "#06B6D4",
+    };
+
+    return Array.from(counts.entries()).map(([rawName, v]) => ({
+      name: bookingSourceMap[rawName as Booking["booking_source"]] || rawName,
+      value: Math.round((v / total) * 100), // %
+      color: colorMap[rawName] || "#999999",
+    }));
+  }, [validBookings, selectedMonth.getFullYear(), monthIndex]);
+
+  // ---- Chỉ số tổng quan tháng hiện tại ----
+  const topStats = useMemo(() => {
+    const mStart = startOfMonth(selectedMonth.getFullYear(), monthIndex);
+    const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), monthIndex);
+    const totalRooms = rooms.length || 1;
+    const dim = daysBetween(mStart, mEnd);
+
+    let revenue = 0;
+    let occNights = 0;
+
+    validBookings.forEach(b => {
+      const nightsInMonth = clampRangeOverlapNights(
+        toLocalDate(b.check_in),
+        toLocalDate(b.check_out),
+        mStart, mEnd
+      );
+      if (nightsInMonth === 0) return;
+      occNights += nightsInMonth;
+      const portion = ((b as any)._amount * nightsInMonth) / (b as any)._nights;
+      revenue += portion;
+    });
+
+    const occupancyRate = (occNights / (totalRooms * dim || 1)) * 100;
+    const adr = occNights > 0 ? revenue / occNights : 0;
+
+    // So sánh % với tháng trước đó
+    const prevMonthIndex = (monthIndex - 1 + 12) % 12;
+    const prevMonthStart = startOfMonth(selectedMonth.getFullYear(), prevMonthIndex);
+    const prevMonthEnd = endOfMonthExclusive(selectedMonth.getFullYear(), prevMonthIndex);
+
+    let prevRevenue = 0;
+    let prevOccNights = 0;
+
+    validBookings.forEach(b => {
+      const nightsInPrev = clampRangeOverlapNights(
+        toLocalDate(b.check_in),
+        toLocalDate(b.check_out),
+        prevMonthStart,
+        prevMonthEnd
+      );
+      if (nightsInPrev > 0 && b._nights > 0) {
+        const portion = (b._amount * nightsInPrev) / b._nights;
+        prevRevenue += portion;
+        prevOccNights += nightsInPrev;
+      }
+    });
+
+    const prevDim = daysBetween(prevMonthStart, prevMonthEnd);
+    const prevOccupancyRate =
+      prevOccNights > 0 ? (prevOccNights / (totalRooms * prevDim)) * 100 : 0;
+    const prevAdr = prevOccNights > 0 ? prevRevenue / prevOccNights : 0;
+
+    // Tính % thay đổi
+    const revenueChange =
+      prevRevenue > 0 ? ((revenue - prevRevenue) / prevRevenue) * 100 : null;
+    const occupancyChange =
+      prevOccupancyRate > 0
+        ? ((occupancyRate - prevOccupancyRate) / prevOccupancyRate) * 100
+        : null;
+    const adrChange =
+      prevAdr > 0 ? ((adr - prevAdr) / prevAdr) * 100 : null;
+
+    return {
+      totalRevenue: Math.round(revenue),
+      occupancyRate: Math.round(occupancyRate * 10) / 10,
+      adr: Math.round(adr),
+      revenueChange,
+      occupancyChange,
+      adrChange,
+    };
+  }, [validBookings, rooms, selectedMonth.getFullYear(), monthIndex]);
+
+  // Nhãn tooltip của ChartContainer -> TV
   const chartConfig = {
-    revenue: { label: "Revenue", color: "#3B82F6" },
-    roomRevenue: { label: "Room Revenue", color: "#3B82F6" },
-    fbRevenue: { label: "F&B Revenue", color: "#10B981" },
-    services: { label: "Services", color: "#F59E0B" },
-    occupancy: { label: "Occupancy %", color: "#8B5CF6" },
+    revenue: { label: "Doanh thu", color: "#3B82F6" },
+    roomRevenue: { label: "Doanh thu phòng", color: "#3B82F6" },
+    // fbRevenue: { label: "F&B", color: "#10B981" },
+    // services: { label: "Dịch vụ", color: "#F59E0B" },
+    occupancy: { label: "Công suất %", color: "#8B5CF6" },
+  } as const;
+
+  if (loading) {
+    return (
+      <MainLayout userRole={userRole || undefined}>
+        <div className="p-6">Đang tải dữ liệu…</div>
+      </MainLayout>
+    );
+  }
+
+  // Hàm export tất cả sheet vào 1 file Excel
+  const exportAll = (
+    revenueData: any[],
+    occupancyData: any[],
+    roomTypeData: any[],
+    channelData: any[],
+    validBookings: any[],
+    selectedMonth: Date
+  ) => {
+    const year = selectedMonth.getFullYear();
+    const monthIndex = selectedMonth.getMonth();
+
+    // 1. Tổng quan KPI (Revenue, Occupancy, ADR, RevPAR theo tháng)
+    const kpiSheet = XLSX.utils.json_to_sheet(
+      revenueData.map((r, i) => ({
+        Năm: year,
+        Tháng: r.month,
+        DoanhThu: r.revenue,
+        DoanhThuPhòng: r.roomRevenue,
+        Occupancy: occupancyData[i]?.occupancy ?? 0,
+        ADR: occupancyData[i]
+          ? r.roomRevenue / Math.max(1, occupancyData[i].occupancy)
+          : 0,
+        // Có thể bổ sung RevPAR nếu bạn có tính
+      }))
+    );
+
+    // 2. Doanh thu theo loại phòng (tháng được chọn)
+    const roomTypeSheet = XLSX.utils.json_to_sheet(
+      roomTypeData.map(r => ({
+        Năm: year,
+        Tháng: monthIndex + 1,
+        LoạiPhòng: r.name,
+        DoanhThu: r.value,
+      }))
+    );
+
+    // 3. Doanh thu theo kênh đặt phòng (tháng được chọn)
+    const channelSheet = XLSX.utils.json_to_sheet(
+      channelData.map(c => ({
+        Năm: year,
+        Tháng: monthIndex + 1,
+        Kênh: c.name,
+        TỷTrọng: c.value + "%",
+      }))
+    );
+
+    // 4. Booking chi tiết (lọc theo tháng được chọn)
+    const mStart = new Date(year, monthIndex, 1);
+    const mEnd = new Date(year, monthIndex + 1, 1);
+
+    const bookingsSheet = XLSX.utils.json_to_sheet(
+      validBookings
+        .filter(b => {
+          const ci = new Date(b.check_in);
+          return ci >= mStart && ci < mEnd;
+        })
+        .map(b => ({
+          BookingID: b.booking_id,
+          Khách: b.guest_name,
+          Phòng: b._room?.room_number,
+          LoạiPhòng: b._room?.room_type,
+          CheckIn: b.check_in,
+          CheckOut: b.check_out,
+          SốĐêm: b._nights,
+          SốTiền: b._amount,
+          Kênh: b.booking_source,
+        }))
+    );
+
+    // Gom vào workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, kpiSheet, "KPI Tổng quan");
+    XLSX.utils.book_append_sheet(wb, roomTypeSheet, "Theo loại phòng");
+    XLSX.utils.book_append_sheet(wb, channelSheet, "Theo kênh");
+    XLSX.utils.book_append_sheet(wb, bookingsSheet, "Booking chi tiết");
+
+    // Xuất file
+    XLSX.writeFile(wb, `Analytics_${year}_Thang${monthIndex + 1}.xlsx`);
   };
 
   return (
-    <MainLayout userRole={userRole}>
+    <MainLayout userRole={userRole || undefined}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Analytics Dashboard</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Monitor your hotel performance metrics
+            <h1 className="text-2xl font-semibold text-[#af3c6a]">Bảng điều khiển phân tích</h1>
+            <p className="text-sm text-muted-foreground mt-1 ">
+              Theo dõi các chỉ số vận hành khách sạn
             </p>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <Select defaultValue="month">
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="day">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-                <SelectItem value="quarter">This Quarter</SelectItem>
-                <SelectItem value="year">This Year</SelectItem>
-              </SelectContent>
-            </Select>
+            <div>
+              <label className="mr-2 font-medium text-[#af3c6a]">Năm:</label>
+              <select
+                className="border px-2 py-1 rounded-3xl "
+                value={selectedMonth.getFullYear()}
+                onChange={(e) => {
+                  const newDate = new Date(selectedMonth);
+                  newDate.setFullYear(Number(e.target.value));
+                  setSelectedMonth(newDate);
+                }}>
+                {Array.from({ length: 5 }).map((_, i) => {
+                  const year = new Date().getFullYear() - 2 + i;
+                  return (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Dropdown Tháng */}
+            <div>
+              <label className="mr-2 font-medium text-[#af3c6a]">Tháng:</label>
+              <select
+                className="border px-2 py-1 rounded-3xl"
+                value={selectedMonth.getMonth()}
+                onChange={(e) => {
+                  const newDate = new Date(selectedMonth);
+                  newDate.setMonth(Number(e.target.value));
+                  setSelectedMonth(newDate);
+                }}
+              >
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <option key={i} value={i}>
+                    Tháng {i + 1}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
+        <Button
+          variant="outline"
+          className="text-white bg-blue-500 hover:text-blue-500 hover:bg-white hover:border-blue-500"
+          onClick={() => exportAll(
+            revenueData,
+            occupancyData,
+            roomTypeData,
+            channelData,
+            validBookings,
+            selectedMonth
+          )}
+        >
+          Xuất File tháng này
+        </Button>
+
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="shadow-sm">
+          <Card className="shadow-xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Revenue
-              </CardTitle>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                className="h-4 w-4 text-muted-foreground"
-              >
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
+              <CardTitle className="text-sm font-medium text-[#af3c6a]">Tổng doanh thu</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$15,942</div>
-              <div className="flex items-center text-xs text-muted-foreground mt-1">
-                <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
-                <span className="text-green-500">12.5%</span>
-                <span className="ml-1">from last month</span>
+              <div className="text-2xl font-bold">
+                {topStats.totalRevenue.toLocaleString("vn-VI", { style: "currency", currency: "VND" })}
               </div>
+              {topStats.revenueChange !== null && (
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  {topStats.revenueChange >= 0 ? (
+                    <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
+                  ) : (
+                    <ArrowDown className="mr-1 h-3 w-3 text-red-500" />
+                  )}
+                  <span
+                    className={
+                      topStats.revenueChange >= 0 ? "text-green-500" : "text-red-500"
+                    }
+                  >
+                    {Math.abs(topStats.revenueChange).toFixed(1)}%
+                  </span>
+                  <span className="ml-1">so với tháng trước</span>
+                </div>
+              )}
             </CardContent>
           </Card>
-          
-          <Card className="shadow-sm">
+
+          <Card className="shadow-xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Occupancy Rate
+              <CardTitle className="text-sm font-medium text-[#af3c6a]">
+                Tỷ lệ lấp đầy
               </CardTitle>
-              <Hotel className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">78.3%</div>
-              <div className="flex items-center text-xs text-muted-foreground mt-1">
-                <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
-                <span className="text-green-500">4.6%</span>
-                <span className="ml-1">from last month</span>
-              </div>
+              <div className="text-2xl font-bold">{topStats.occupancyRate}%</div>
+              {topStats.occupancyChange !== null && (
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  {topStats.occupancyChange >= 0 ? (
+                    <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
+                  ) : (
+                    <ArrowDown className="mr-1 h-3 w-3 text-red-500" />
+                  )}
+                  <span
+                    className={
+                      topStats.occupancyChange >= 0 ? "text-green-500" : "text-red-500"
+                    }
+                  >
+                    {Math.abs(topStats.occupancyChange).toFixed(1)}%
+                  </span>
+                  <span className="ml-1">so với tháng trước</span>
+                </div>
+              )}
             </CardContent>
           </Card>
-          
-          <Card className="shadow-sm">
+
+          <Card className="shadow-xl">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Average Daily Rate
+              <CardTitle className="text-sm font-medium text-[#af3c6a]">
+                Giá bình quân/ngày (ADR)
               </CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">$142.50</div>
-              <div className="flex items-center text-xs text-muted-foreground mt-1">
-                <ArrowDown className="mr-1 h-3 w-3 text-red-500" />
-                <span className="text-red-500">2.3%</span>
-                <span className="ml-1">from last month</span>
+              <div className="text-2xl font-bold">
+                {topStats.adr.toLocaleString("vi-VN", {
+                  style: "currency",
+                  currency: "VND",
+                })}
               </div>
+              {topStats.adrChange !== null && (
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  {topStats.adrChange >= 0 ? (
+                    <ArrowUp className="mr-1 h-3 w-3 text-green-500" />
+                  ) : (
+                    <ArrowDown className="mr-1 h-3 w-3 text-red-500" />
+                  )}
+                  <span
+                    className={
+                      topStats.adrChange >= 0 ? "text-green-500" : "text-red-500"
+                    }
+                  >
+                    {Math.abs(topStats.adrChange).toFixed(1)}%
+                  </span>
+                  <span className="ml-1">so với tháng trước</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
-        
+
         <Tabs defaultValue="revenue" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="revenue">Revenue</TabsTrigger>
-            <TabsTrigger value="occupancy">Occupancy</TabsTrigger>
-            <TabsTrigger value="channels">Channels</TabsTrigger>
+            <TabsTrigger
+              value="revenue"
+              className="data-[state=active]:bg-[#4b9ae9] data-[state=active]:text-white hover:bg-[#4b9ae9] hover:text-white rounded-lg px-4 py-2 transition"
+            >
+              Doanh thu
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="occupancy"
+              className="data-[state=active]:bg-[#4b9ae9] data-[state=active]:text-white hover:bg-[#4b9ae9] hover:text-white rounded-lg px-4 py-2 transition"
+            >
+              Công suất
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="channels"
+              className="data-[state=active]:bg-[#4b9ae9] data-[state=active]:text-white hover:bg-[#4b9ae9] hover:text-white rounded-lg px-4 py-2 transition"
+            >
+              Kênh đặt phòng
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="room-type"
+              className="data-[state=active]:bg-[#4b9ae9] data-[state=active]:text-white hover:bg-[#4b9ae9] hover:text-white rounded-lg px-4 py-2 transition"
+            >
+              Theo loại phòng
+            </TabsTrigger>
+
+            <TabsTrigger
+              value="guest"
+              className="data-[state=active]:bg-[#4b9ae9] data-[state=active]:text-white hover:bg-[#4b9ae9] hover:text-white rounded-lg px-4 py-2 transition"
+            >
+              Tổng hợp KH
+            </TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="revenue" className="space-y-4">
-            <Card className="shadow-sm">
+            <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle>Revenue Overview</CardTitle>
-                <CardDescription>
-                  Monthly revenue breakdown for your hotel
-                </CardDescription>
+                <CardTitle>Tổng quan doanh thu</CardTitle>
+                <CardDescription>Doanh thu phòng theo tháng</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-96">
                   <BarChart data={revenueData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
-                    <YAxis />
+                    <YAxis
+                      width={100} // tăng khoảng trống bên trái
+                      tickFormatter={(value) =>
+                        new Intl.NumberFormat("vi-VN").format(value)
+                      }
+                    />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="roomRevenue" stackId="a" fill="#3B82F6" name="Room Revenue" />
-                    <Bar dataKey="fbRevenue" stackId="a" fill="#10B981" name="F&B Revenue" />
-                    <Bar dataKey="services" stackId="a" fill="#F59E0B" name="Services" />
+                    <Bar dataKey="roomRevenue" stackId="a" fill="#ca3e7f" name="Doanh thu phòng" />
                   </BarChart>
                 </ChartContainer>
               </CardContent>
             </Card>
-            
-            <div className="grid gap-4 md:grid-cols-2">
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle>Revenue by Room Type</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ChartContainer config={chartConfig} className="h-64">
-                    <PieChart>
-                      <Pie
-                        data={roomTypeData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                      >
-                        {roomTypeData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                    </PieChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-              
-              <Card className="shadow-sm">
-                <CardHeader>
-                  <CardTitle>Daily Revenue Trend</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ChartContainer config={chartConfig} className="h-64">
-                    <LineChart data={dailyRevenueData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="day" />
-                      <YAxis />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <Line type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={2} />
-                    </LineChart>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
-            </div>
           </TabsContent>
-          
+
+
           <TabsContent value="occupancy" className="space-y-4">
-            <Card className="shadow-sm">
+            <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle>Occupancy Overview</CardTitle>
-                <CardDescription>
-                  Room occupancy statistics by month
-                </CardDescription>
+                <CardTitle>Tổng quan công suất</CardTitle>
+                <CardDescription>Công suất phòng theo tháng</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-96">
@@ -282,41 +706,24 @@ const Analytics = () => {
                     <XAxis dataKey="month" />
                     <YAxis domain={[0, 100]} />
                     <ChartTooltip content={<ChartTooltipContent />} />
-                    <Line 
-                      type="monotone" 
-                      dataKey="occupancy" 
-                      stroke="#8B5CF6" 
+                    <Line
+                      type="monotone"
+                      dataKey="occupancy"
+                      stroke="#8B5CF6"
                       strokeWidth={3}
                       dot={{ fill: "#8B5CF6", strokeWidth: 2, r: 4 }}
                     />
                   </LineChart>
                 </ChartContainer>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                  {[
-                    { label: "Standard Rooms", value: "82%" },
-                    { label: "Deluxe Rooms", value: "76%" },
-                    { label: "Suites", value: "65%" },
-                    { label: "Overall", value: "78%" },
-                  ].map((item, i) => (
-                    <Card key={i} className="bg-muted/50">
-                      <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground">{item.label}</p>
-                        <p className="text-lg font-medium mt-1">{item.value}</p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="channels" className="space-y-4">
-            <Card className="shadow-sm">
+            <Card className="shadow-xl">
               <CardHeader>
-                <CardTitle>Booking Channels</CardTitle>
-                <CardDescription>
-                  Analysis of booking sources and channel performance
-                </CardDescription>
+                <CardTitle>Kênh đặt phòng</CardTitle>
+                <CardDescription>Tỷ trọng (%) theo kênh trong tháng</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-96">
@@ -342,12 +749,115 @@ const Analytics = () => {
                   {channelData.map((item, i) => (
                     <Card key={i} className="bg-muted/50">
                       <CardContent className="p-4 text-center">
-                        <p className="text-xs text-muted-foreground">{item.label}</p>  {/* name */}
+                        <p className="text-xs text-muted-foreground">{item.name}</p>
                         <p className="text-lg font-medium mt-1">{item.value}%</p>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="room-type" className="space-y-4">
+            <Card className="shadow-xl">
+              <CardHeader>
+                <CardTitle>Doanh thu theo loại phòng</CardTitle>
+                <CardDescription>Tỷ trọng (%) theo loại phòng trong tháng</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ChartContainer config={chartConfig} className="h-96">
+                  <PieChart>
+                    <Pie
+                      data={roomTypeData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={120}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {roomTypeData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ChartContainer>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                  {roomTypeData.map((item, i) => (
+                    <Card key={i} className="bg-muted/50">
+                      <CardContent className="p-4 text-center">
+                        <p className="text-xs text-muted-foreground">{item.name}</p>
+                        <p className="text-lg font-medium mt-1">{new Intl.NumberFormat("vi-VN").format(item.value)} VND</p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Phần Danh sách KH */}
+          <TabsContent value="guest" className="">
+            <Card className="shadow-lg border-l-4 border-[#da4c8e]">
+              <CardHeader className="pb-4">
+                <CardTitle>Danh sách khách hàng theo tháng</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ResponsiveContainer width="80%" height="100%">
+                  <div>
+                    <table className="table-fixed w-full border">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="border px-3 py-2 w-14">STT</th>
+                          <th className="border px-3 py-2 w-20">Phòng</th>
+                          <th className="border px-3 py-2 w-40">Tên KH</th>
+                          <th className="border px-3 py-2 w-44">SĐT</th>
+                          <th className="border px-3 py-2 w-32">Ngày check-in</th>
+                          <th className="border px-3 py-2 w-32">Ngày check-out</th>
+                          <th className="border px-3 py-2 w-24">Nguồn đặt</th>
+                          <th className="border px-3 py-2 w-32">Trạng thái booking</th>
+                          <th className="border px-3 py-2 w-28">Ngày đặt</th>
+                          <th className="border px-3 py-2 w-28">Tổng tiền</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredBookings
+                          .sort((a, b) => a.room_id - b.room_id) // sắp xếp theo ngày check-in từ nhỏ đến lớn
+                          .map((b, index) => {
+                            const room = rooms.find(r => r.room_id === b.room_id); // tìm room tương ứng
+                            return (
+                              <tr key={b.booking_id} className="text-center hover:bg-gray-50">
+                                <td className="border px-3 py-2">{index + 1}</td>
+                                <td className="border px-3 py-2">{room?.room_number ?? "-"}</td>
+                                <td className="border px-3 py-2">{b.guest_name}</td>
+                                <td className="border px-3 py-2">{b.phone_number ?? "-"}</td>
+                                <td className="border px-3 py-2">
+                                  {new Date(b.check_in).toLocaleDateString("vi-VN")}
+                                </td>
+                                <td className="border px-3 py-2">
+                                  {new Date(b.check_out).toLocaleDateString("vi-VN")}
+                                </td>
+                                <td className="border px-3 py-2">{b.booking_source ?? "-"}</td>
+                                <td className="border px-3 py-2">{b.booking_status ?? "-"}</td>
+                                <td className="border px-3 py-2">
+                                  {new Date(b.booking_date).toLocaleDateString("vi-VN")}
+                                </td>
+                                <td className="border px-3 py-2">
+                                  {b.amount_received != null
+                                    ? Number(b.amount_received).toLocaleString("vi-VN")
+                                    : "-"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                </ResponsiveContainer>
               </CardContent>
             </Card>
           </TabsContent>

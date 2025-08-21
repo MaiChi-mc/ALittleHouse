@@ -5,17 +5,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
-import Bookings from "./pages/Bookings";
+import Bookings from "./pages/Booking";
 import RoomManagement from "./pages/RoomManagement";
 import Messages from "./pages/Messages";
 import Analytics from "./pages/Analytics";
+import About from "./pages/About";
 import NotFound from "./pages/NotFound";
+import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import CreateAccount from "./pages/CreateAccount";
-import PrivateRoute from "./pages/PrivateRoute"; 
-import Sidebar from "./components/layout/Sidebar"; 
-import MainLayout from "./components/layout/MainLayout";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 const queryClient = new QueryClient();
 
@@ -52,12 +51,10 @@ const App = () => {
               <Route path="/room-management" element={<RoomManagement />} />
               <Route path="/messages" element={<Messages />} />
               <Route path="/email" element={<Messages />} />
+              <Route path="/about" element={<About />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/analytics" element={<Analytics />} />
-              
-              {/* Route dành cho admin, chỉ admin mới có thể truy cập */}
-              <Route element={<PrivateRoute allowedRole="Admin" />}>
-                <Route path="/create-account" element={<CreateAccount />} />
-              </Route>
+              <Route path="/create-account" element={<CreateAccount />} />     
 
               {/* Route nếu không tìm thấy trang */}
               <Route path="*" element={<NotFound />} />

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import MainLayout from '@/components/layout/MainLayout';
+import { Button } from '@/components/ui/button';
 
 const CreateAccount = () => {
   const [user_name, setName] = useState('');
@@ -49,34 +50,34 @@ const CreateAccount = () => {
   return (
     <MainLayout userRole={userRole}>
       <div className="bg-blue-100 p-8 rounded-lg shadow-xl w-full max-w-lg mx-auto mt-8">
-      <h2 className="text-center text-2xl font-semibold mb-6">Tạo tài khoản người dùng</h2>
+      <h2 className="text-center text-2xl font-semibold mb-6 text-blue-500">Tạo tài khoản người dùng</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label className="block font-medium text-gray-700">Tên người dùng:</label>
+          <label className="px-3 block font-medium text-blue-500">Tên người dùng</label>
           <input
             type="text"
             value={user_name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-lg w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="mb-4">
-          <label className="block font-medium text-gray-700">Email:</label>
+          <label className="px-3 block font-medium text-blue-500">Email</label>
           <input
             type="email"
             value={user_email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-lg w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
         <div className="mb-4">
-          <label className="block font-medium text-gray-700">Vai trò:</label>
+          <label className="px-3 block font-medium text-blue-500">Vai trò</label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value)}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-lg w-full p-3  border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="Receptionist">Receptionist</option>
             <option value="Admin">Admin</option>
@@ -84,21 +85,22 @@ const CreateAccount = () => {
           </select>
         </div>
         <div className="mb-6">
-          <label className="block font-medium text-gray-700">Mật khẩu:</label>
+          <label className="block font-medium text-blue-500">Mật khẩu</label>
           <input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="shadow-lg w-full p-3 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <button
+        <Button
           type="submit"
-          className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          variant="outline"
+          className="w-full py-3 bg-[#4b9ae9] text-white rounded-full border-[#4b9ae9] hover:bg-white hover:text-blue-500 hover:border-blue-500 hover:border focus:outline-none focus:ring-2 focus:ring-blue-500  shadow-blue-500/50 shadow-lg"
         >
           Tạo tài khoản
-        </button>
+        </Button>
       </form>
       {message && <p className="text-green-500 text-center mt-4">{message}</p>}
       {error && <p className="text-red-500 text-center mt-4">{error}</p>}

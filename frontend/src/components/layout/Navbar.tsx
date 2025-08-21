@@ -10,9 +10,6 @@ const Navbar = () => {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [timerExpired, setTimerExpired] = useState(false);
 
-  const email = localStorage.getItem('email'); // Lấy email từ localStorage 
-  const role = localStorage.getItem('role'); // Lấy role từ localStorage
-
   // Hàm đăng xuất
   const handleLogout = () => {
     // Xóa khỏi localStorage
@@ -31,7 +28,7 @@ const Navbar = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       handleLogout();
-    }, 20000 *30); // 20 giây = 20000 milliseconds, tính 30 phút
+    }, 20000 *300); // 20 giây = 20000 milliseconds, tính 30 phút
 
     // Dọn dẹp timer khi component unmount hoặc khi token/role thay đổi
     return () => clearTimeout(timer);
@@ -40,45 +37,37 @@ const Navbar = () => {
   return (
     <header className="border-b bg-white py-4 px-6 flex justify-between items-center">
       <div>
-        <h1 className="text-xl font-semibold text-gray-800">
-          Welcome to A Little House
+        <h1 className="text-xl font-semibold text-[#3a80c6]">
+          Chào mừng đến A Little House
         </h1>
-        <p className="text-sm text-gray-500">Manage your hotel with ease</p>
+        <p className="text-sm text-[#6e9bc7]">Quản lý khách sạn dễ dàng</p>
       </div>
       
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5 text-gray-500" />
-          <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-        </Button>
-        
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="flex items-center gap-2">
-              <div className="h-8 w-8 rounded-full bg-hotel-500 flex items-center justify-center">
+            <Button variant="ghost" size="sm" className="flex items-center gap-2 ">
+              <div className="h-8 w-8 rounded-full bg-[#5aa5f0] flex items-center justify-center">
                 <User className="h-5 w-5 text-white" />
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-sm font-medium">{role}</p>
-                <p className="text-xs text-gray-500">{email}</p>
+                <p className="text-sm font-medium text-[#4786c5]">{localStorage.getItem('role')}</p>
+                <p className="text-xs text-[#4786c5]">{localStorage.getItem('email')}</p>
               </div>
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          </DropdownMenuTrigger >
+          <DropdownMenuContent align="end" className="shadow-lg text-[#4786c5]">
             <DropdownMenuLabel>
-              My Account
+              Tài khoản của tôi
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-red-500" onClick={handleLogout}>
-              Log out
-            </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
+                Hồ sơ
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-red-500 " onClick={handleLogout}>
+                Đăng xuất
+              </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

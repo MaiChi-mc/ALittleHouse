@@ -1,32 +1,37 @@
 // src/components/layout/Sidebar.tsx
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Calendar, MessageCircle, ChartBar, Bed, UserPlus } from 'lucide-react';  
+import { Home, Calendar, MessageCircle, ChartBar, Bed, UserPlus, Notebook } from 'lucide-react';  
 import { cn } from "@/lib/utils";
 
 const Sidebar = ({ userRole }: { userRole: string | null }) => {
   const location = useLocation();
 
   const navItems = [
-    { name: "Dashboard", path: "/", icon: Home },
-    { name: "Bookings", path: "/bookings", icon: Calendar },
-    { name: "Room Management", path: "/room-management", icon: Bed },
-    { name: "Messages", path: "/messages", icon: MessageCircle, unread: 5 },
-    { name: "Analytics", path: "/analytics", icon: ChartBar },
+    { name: "Bảng Điều Khiển", path: "/", icon: Home },
+    { name: "Lịch", path: "/bookings", icon: Calendar },
+    { name: "Quản Lý Phòng", path: "/room-management", icon: Bed },
+    { name: "Tin Nhắn", path: "/messages", icon: MessageCircle },
+    { name: "Nội Quy & Giá", path: "/about", icon: Notebook },
   ];
 
   // Nếu người dùng là admin, thêm mục "Tạo tài khoản"
   if (userRole === 'Admin') {
     navItems.push({
-      name: "Create Account",
+      name: "Phân tích",
+      path: "/analytics",
+      icon: ChartBar,
+    });
+    navItems.push({
+      name: "Tạo tài khoản",
       path: "/create-account",
       icon: UserPlus,
     });
   }
 
   return (
-    <div className="bg-sidebar h-screen w-[250px]">
+    <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-gradient-to-r from-[#f0bfd3] to-[#a0c8ef]">  
       <div className="flex items-center p-4 mb-6">
-        <Link to="/dashboard" className="text-white font-bold text-xl">
+        <Link to="/" className="text-[#af3c6a] font-bold text-3xl">
           A Little House
         </Link>
       </div>
@@ -42,16 +47,11 @@ const Sidebar = ({ userRole }: { userRole: string | null }) => {
               to={item.path}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 my-1 rounded-md transition-colors whitespace-nowrap relative",
-                isActive ? "bg-sidebar-accent text-white" : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                isActive ? "bg-[#80b6ec]  text-[#af3c6a] font-bold" : "text-[#cb5f8a] hover:bg-[#6dabe8] hover:text-white hover:shadow-lg",
               )}
             >
               <item.icon size={20} />
               <span>{item.name}</span>
-              {item.unread && item.unread > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs font-medium">
-                  {item.unread}
-                </span>
-              )}
             </Link>
           );
         })}

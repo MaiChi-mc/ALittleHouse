@@ -55,7 +55,7 @@ router.get('/email/threads', async (req, res) => {
 
 // API: Gửi email
 router.post('/email/send', async (req, res) => {
-  console.log('📥 req.body:', req.body);
+  console.log(' req.body:', req.body);
   const { to, subject, body, threadId, inReplyTo } = req.body;
 
   if (!to || !to.includes('@')) {

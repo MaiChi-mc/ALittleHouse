@@ -27,3 +27,5 @@ dist-ssr
 # Ignore environment and sensitive files
 backend/.env
 backend/routes/oauth.js
+
+.env

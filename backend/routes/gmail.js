@@ -16,17 +16,16 @@ auth.setCredentials({
 
 const gmail = google.gmail({ version: 'v1', auth });
 
-// Bỏ hoàn toàn các route OAuth vì dùng chế độ doanh nghiệp (1 Gmail duy nhất)
-
 // API: Lấy danh sách email từ Gmail
 router.get('/email/threads', async (req, res) => {
   try {
-    const list = await gmail.users.threads.list({ userId: 'me', maxResults: 15 });
+    const list = await gmail.users.threads.list({ userId: 'me', maxResults: 50 });
     const threads = list.data.threads || [];
 
     const result = await Promise.all(
       threads.map(async (thread) => {
         const detail = await gmail.users.threads.get({ userId: 'me', id: thread.id });
+
         const messages = detail.data.messages.map((msg) => {
           const headers = msg.payload.headers;
           const from = headers.find(h => h.name === 'From')?.value || '';
@@ -34,9 +33,21 @@ router.get('/email/threads', async (req, res) => {
           const date = headers.find(h => h.name === 'Date')?.value || '';
           const replyTo = headers.find(h => h.name === 'Reply-To')?.value || from;
           const messageId = headers.find(h => h.name === 'Message-ID')?.value || '';
-          const snippet = msg.snippet;
 
-          return { from, replyTo, subject, date, snippet, messageId };
+          function getBody(payload) {
+            if (payload.body?.data) {
+              return Buffer.from(payload.body.data, 'base64').toString('utf-8');
+            } else if (payload.parts?.length) {
+              return payload.parts
+                .map(part => getBody(part))
+                .join('');
+            }
+            return '';
+          }
+
+          const body = getBody(msg.payload);
+
+          return { from, replyTo, subject, date, body, messageId };
         });
 
         return {
@@ -53,6 +64,7 @@ router.get('/email/threads', async (req, res) => {
   }
 });
 
+
 // API: Gửi email
 router.post('/email/send', async (req, res) => {
   console.log(' req.body:', req.body);
@@ -63,7 +75,7 @@ router.post('/email/send', async (req, res) => {
     return res.status(400).send("Recipient email address is required");
   }
 
-  console.log(" Email will be sent to:", to);
+  // console.log(" Email will be sent to:", to);
 
   const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
 
@@ -80,7 +92,7 @@ router.post('/email/send', async (req, res) => {
   }
 
   const message = [...headers, '', body].join('\n');
-  console.log(" Raw MIME message:\n", message);
+  // console.log(" Raw MIME message:\n", message);
 
   const encodedMessage = Buffer.from(message)
     .toString('base64')
@@ -97,10 +109,9 @@ router.post('/email/send', async (req, res) => {
       },
     });
 
-    console.log(" Email sent successfully!");
     res.json({ success: true });
   } catch (err) {
-    console.error(" Gmail send error:", err.response?.data || err.message);
+    // console.error(" Gmail send error:", err.response?.data || err.message);
     res.status(500).send("Failed to send email via Gmail API");
   }
 });

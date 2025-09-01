@@ -50,13 +50,13 @@ const Dashboard = () => {
   // Vẫn dùng để render phần đang thấy
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [visibleCount, setVisibleCount] = useState(5);
-
+ 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         const [roomsRes, bookingsRes, activityLogsRes] = await Promise.all([
           fetch("http://localhost:8080/api/auth/rooms"),
-          fetch("http://localhost:8080/api/auth/bookings/all"),
+          fetch("http://localhost:8080/api/auth/rooms_bookings/current"),
           fetch("http://localhost:8080/api/auth/activity-logs"),
         ]);
 
@@ -91,7 +91,38 @@ const Dashboard = () => {
           return null;
         };
 
-        const isCronJob = (b: any) => !b.booking_source || b.booking_source === "System";
+        // Hoạt động gần đây
+        const activitiesFull = (activityLogsData as any[])
+          .filter((log) => log.log_id)
+          .sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime())
+          .map((log) => {
+            const timeValue = toDateTime(log.performed_at);
+
+            const text = (log?.description ?? "").trim() || "—";
+
+            const user = log.user_name
+              ? log.booking_source
+                ? `${log.booking_source} + ${log.user_name} `
+                : log.user_name
+              : log.performed_by || "System";
+
+            return {
+              time: timeValue
+                ? timeValue.toLocaleString("vi-VN", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+                : "N/A",
+              text,                 // <- text = description
+              description: text,    
+              user,
+            };
+          });
+
+        setAllActivities(activitiesFull);
 
         // CHUẨN HÓA DỮ LIỆU BOOKING
         const data = (bookingsData as any[]).map((b) => ({
@@ -120,70 +151,19 @@ const Dashboard = () => {
           )
         );
 
-        // Hoạt động gần đây
-        const activitiesFull = (activityLogsData as any[])
-          .filter((log) => log.log_id)
-          .sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime())
-          .map((log) => {
-            const timeValue = toDateTime(log.performed_at);
-
-            // Thêm booking_source vào text
-            const text = `${log.action_type} - ${log.guest_name || 'Khách không xác định'} booking for Room ${log.room_number} (${log.booking_status}) ${log.booking_source ? `+ ${log.booking_source}` : ''}`;
-
-            // Ghép user_name với booking_source
-            const user = log.user_name
-              ? log.booking_source
-                ? `${log.booking_source} + ${log.user_name} `
-                : log.user_name
-              : log.performed_by || "System";
-
-            return {
-              time: timeValue
-                ? timeValue.toLocaleString("vi-VN", {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-                : "N/A",
-              text,
-              user,
-            };
-          });
-
-        setAllActivities(activitiesFull);
-
         // MERGE BOOKINGS -> ROOM STATUS
         const mergedRooms = roomsData.map((room: any) => {
-          const activeBooking = data.find((b: any) => {
-            const ci = new Date(b.check_in);
-            const co = new Date(b.check_out);
-            return (
-              b.room_id === room.room_id &&
-              ["Confirmed", "Checked-in"].includes(b.booking_status) &&
-              ci <= today &&
-              co > today
-            );
-          });
+          const activeBooking = data.find((b: any) => (
+            b.room_id === room.room_id &&
+            ["Confirmed", "Checked-in"].includes(b.booking_status) &&
+            b.check_in_str && b.check_out_str &&
+            b.check_in_str <= todayStr && todayStr <= b.check_out_str // so sánh theo ngày, bao gồm ngày checkout
+          ));
 
           let status: Room["status"] = "Available";
+          if (activeBooking) status = "Occupied";
 
-          if (activeBooking) {
-            if (activeBooking.booking_status === "Checked-in") {
-              status = "Occupied";
-            } else if (
-              activeBooking.booking_status === "Confirmed" &&
-              activeBooking.check_in_str === todayStr
-            ) {
-              status = "Occupied"; // check-in hôm nay
-            }
-          }
-
-          return {
-            ...room,
-            status,
-          };
+          return { ...room, status };
         });
 
         setRooms(mergedRooms);
@@ -219,11 +199,9 @@ const Dashboard = () => {
                   <div key={i} className="flex items-start gap-3">
                     <div className="h-2 w-2 mt-2 rounded-full bg-[#af3c6a]"></div>
                     <div>
-                      <p className="text-sm">{item.text}</p>
+                      <p className="text-sm">{item.description || item.text}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <p className="text-xs text-muted-foreground">{item.time}</p>
-                        <span className="h-1 w-1 rounded-full bg-gray-300"></span>
-                        <p className="text-xs text-muted-foreground">{item.user}</p>
                       </div>
                     </div>
                   </div>

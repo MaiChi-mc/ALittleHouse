@@ -101,7 +101,7 @@ const Bookings = () => {
 
   // Hàm xóa booking
   const handleDeleteBooking = async (booking_id: number) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa booking này?")) return;
+    if (!window.confirm("Bạn có chắc chắn muốn hủy booking này?")) return;
 
     try {
       const res = await fetch(`http://localhost:8080/api/auth/bookings/${booking_id}`, {
@@ -113,33 +113,65 @@ const Bookings = () => {
         throw new Error(text || res.statusText);
       }
 
-      alert("Xóa booking thành công");
-      fetchRooms(); // Cập nhật lại danh sách phòng sau khi xóa
+      alert("Đã hủy booking thành công");
+      fetchRooms(); // Cập nhật lại danh sách phòng để ẩn booking Cancelled
     } catch (err: any) {
-      alert("Xóa thất bại: " + err.message);
-      console.error("Lỗi khi xóa booking:", err);
+      alert("Hủy thất bại: " + err.message);
+      console.error("Lỗi khi hủy đơn booking:", err);
     }
   };
 
-
-  // Hàm update booking (gọi khi Save form Edit)
   const handleUpdateBooking = async () => {
     if (!editBookingId) return;
-    const fieldsToUpdate = Object.keys(editData);
-    for (const field of fieldsToUpdate) {
-      let value = editData[field];
-      if (["check_in", "check_out", "booking_date"].includes(field)) {
-        value = convertDDMMYYYYtoISO(value);
+
+    // Chuẩn hóa ngày và kiểm tra hợp lệ
+    let newEditData = { ...editData };
+
+    ["check_in", "check_out", "booking_date"].forEach((field) => {
+      if (newEditData[field]) {
+        newEditData[field] = convertDDMMYYYYtoISO(newEditData[field]);
       }
-      await fetch(`http://localhost:8080/api/auth/bookings/${editBookingId}`, {
+    });
+
+    if (newEditData.check_in && newEditData.check_out) {
+      const checkIn = new Date(newEditData.check_in);
+      const checkOut = new Date(newEditData.check_out);
+      const bookingDate = newEditData.booking_date
+        ? new Date(newEditData.booking_date)
+        : null;
+
+      if (checkOut < checkIn) {
+        alert("Ngày check-out phải sau ngày check-in");
+        return;
+      }
+
+      if (bookingDate && (checkIn < bookingDate || checkOut < bookingDate)) {
+        alert("Ngày check-in và check-out phải sau ngày đặt phòng");
+        return;
+      }
+    }
+
+    // Gọi API một lần
+    try {
+      const res = await fetch(`http://localhost:8080/api/auth/bookings/${editBookingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ field, value })
+        body: JSON.stringify(newEditData),
       });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+
+      alert("Cập nhật booking thành công");
+      setEditBookingId(null);
+      setEditData({});
+      fetchRooms();
+    } catch (error) {
+      console.error("Lỗi khi cập nhật booking:", error);
+      alert("Có lỗi khi cập nhật booking");
     }
-    setEditBookingId(null);
-    setEditData({});
-    fetchRooms();
   };
 
   // Hàm định dạng ngày giờ
@@ -182,7 +214,7 @@ const Bookings = () => {
                 setSelectedMonth(newDate);
               }}>
               {Array.from({ length: 5 }).map((_, i) => {
-                const year = new Date().getFullYear() - 2 + i;
+                const year = new Date().getFullYear() + i;
                 return (
                   <option key={year} value={year}>
                     {year}
@@ -257,9 +289,9 @@ const Bookings = () => {
 
                 return (
                   <tr key={roomIndex}>
-                    <td 
-                    onClick={() => navigate(`/room-management?room_id=${room.room_id}`)}
-                    className="sticky left-0 z-30 px-2 py-2 font-medium text-center text-m w-32 bg-white text-[#af3c6a] hover:bg-[#f1c9db] hover:text-[#af3c6a] border">
+                    <td
+                      onClick={() => navigate(`/room-management?room_id=${room.room_id}`)}
+                      className="sticky left-0 z-30 px-2 py-2 font-medium text-center text-m w-32 bg-white text-[#af3c6a] hover:bg-[#f1c9db] hover:text-[#af3c6a]  hover:font-bold border">
                       {room.room_number}
                     </td>
 
@@ -278,7 +310,7 @@ const Bookings = () => {
                               <td key={i} colSpan={b.span} className="border px-1 py-1 align-top">
                                 <div
                                   id={`booking-${b.booking_id}`}
-                                  className={`${getStatusColor(b.booking_status)} rounded-md text-xs p-2 flex items-center hover:bg-[#dfcd2a] cursor-pointer`}
+                                  className={`${getStatusColor(b.booking_status)} rounded-md text-xs p-2 flex items-center hover:bg-[#bcaaf2] cursor-pointer`}
                                   onClick={() => {
                                     setEditBookingId(b.booking_id);
                                     setEditData({
@@ -312,7 +344,7 @@ const Bookings = () => {
                                       }}
                                       className="text-[12px] underline"
                                     >
-                                      Xóa
+                                      Cancel
                                     </button>
                                   )}
                                 </div>

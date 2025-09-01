@@ -3,7 +3,6 @@ import MainLayout from "@/components/layout/MainLayout";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Search,
   MessageCircle,
   User,
   Send,
@@ -14,7 +13,6 @@ import {
   BookOpen,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useEmail } from "@/hooks/useEmail";
 
@@ -25,40 +23,48 @@ const EXTERNAL_LINKS = [
     label: "Facebook",
     url: "https://business.facebook.com/latest/inbox/all/?asset_id=494341691067161",
     icon: <Facebook className="h-5 w-5" />,
-    description: "Mở Facebook Messenger",
+    description: "Truy cập Facebook Messenger",
+  },
+  {
+    value: "email",
+    label: "Gmail",
+    url: "https://mail.google.com/mail/u/1/?ogbl#inbox",
+    icon: <Mail className="h-5 w-5" />,
+    description: "Truy cập tin nhắn Gmail",
   },
   {
     value: "airbnb",
     label: "Airbnb",
     url: "https://www.airbnb.com/hosting/messages/2259919156",
     icon: <Home className="h-5 w-5" />,
-    description: "Quản lý đặt phòng Airbnb",
+    description: "Truy cập tin nhắn Airbnb",
   },
   {
     value: "agoda",
     label: "Agoda",
     url: "https://ycs.agoda.com/mldc/en-us/app/reporting/booking/multiproperty",
     icon: <Globe className="h-5 w-5" />,
-    description: "Đăng nhập Agoda Partner",
+    description: "Truy cập Agoda Partner",
   },
   {
     value: "booking",
     label: "Booking.com",
     url: "https://admin.booking.com/hotel/hoteladmin/extranet_ng/manage/home.html?ses=ce81629067920ec73b778144fb3b9e76&f_gc_header=1&hotel_id=14341961",
     icon: <BookOpen className="h-5 w-5" />,
-    description: "Truy cập Booking.com Extranet",
+    description: "Truy cập tin nhắn Booking",
   },
 ] as const;
 
-type ExternalValue = (typeof EXTERNAL_LINKS)[number]["value"];
+function cleanEmailBody(html: string): string {
+  return html
+    .replace(/%opentrack%.*?(?=<\/body>|$)/is, "")
+    .replace(/<a[^>]+unsubscribe[^>]*>.*?<\/a>/gis, "")
+    .replace(/https:\/\/www\.airbnb\.com[^ ]+/g, "")
+    .trim();
+}
 
-const CHANNELS: ReadonlyArray<ExternalValue | "email"> = [
-  "facebook",
-  "email",
-  "airbnb",
-  "agoda",
-  "booking",
-];
+
+type ExternalValue = (typeof EXTERNAL_LINKS)[number]["value"];
 
 const Messages = () => {
   const userRole = localStorage.getItem("role");
@@ -70,6 +76,8 @@ const Messages = () => {
   // Email threads từ hook (không còn mockdata)
   const { threads: initialThreads, sendEmail } = useEmail();
   const [threads, setThreads] = useState<any[]>([]);
+  const [visibleCount, setVisibleCount] = useState(10); // số lượng email hiển thị ban đầu
+
 
   // Đồng bộ lại threads khi initialThreads thay đổi
   useEffect(() => {
@@ -102,14 +110,14 @@ const Messages = () => {
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-full mx-4 border rounded-lg p-4 shadow-sm flex items-start gap-3 hover:bg-secondary/50 transition"
+          className="w-full mx-4 border rounded-lg p-4 shadow-sm flex items-start gap-3 hover:bg-secondary/50 transition bg-[#6fb7ff] hover:bg-[#99c9f9]"
         >
-          <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center">
+          <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center text-[#4e9cea]">
             {link.icon}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium">{link.label}</p>
-            <p className="text-sm text-muted-foreground truncate">{link.description}</p>
+            <p className="font-bold text-[#fcfcfc]">{link.label}</p>
+            <p className="text-sm text-muted-foreground truncate text-[#e2eaf3]">{link.description}</p>
           </div>
         </a>
       </div>
@@ -129,7 +137,7 @@ const Messages = () => {
           <div className="w-[440px] shrink-0 flex flex-col border-r overflow-hidden">
             <Tabs value={selectedChannel} onValueChange={(value) => setSelectedChannel(value)} className="flex h-full flex-col">
               <TabsList className="flex w-full p-1 m-2">
-                {CHANNELS.map((channel) => (
+                {(["email", "facebook", "airbnb", "agoda", "booking"]).map((channel) => (
                   <TabsTrigger
                     key={channel}
                     value={channel}
@@ -140,22 +148,15 @@ const Messages = () => {
                 ))}
               </TabsList>
 
-              {/* Email: danh sách hội thoại thật từ Gmail */}
               <TabsContent value="email" className="m-0 flex-1 min-h-0 min-w-0 flex flex-col">
-                <div className="px-3 py-2">
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input type="search" placeholder="Search messages..." className="w-full pl-8" />
-                  </div>
-                </div>
-                <Separator />
-
                 <ScrollArea className="flex-1 min-h-0 w-full">
                   <div className="space-y-1 p-2">
-                    {emailConversations.map((conversation) => (
+                    {emailConversations.slice(0, visibleCount).map((conversation) => (
                       <div
                         key={conversation.id}
-                        className={`flex items-start gap-3 p-3 rounded-md cursor-pointer ${selectedConversation === conversation.id ? "bg-secondary" : "hover:bg-secondary/50"
+                        className={`flex items-start gap-3 p-3 rounded-md cursor-pointer ${selectedConversation === conversation.id
+                            ? "bg-secondary"
+                            : "hover:bg-secondary/50"
                           }`}
                         onClick={() => setSelectedConversation(conversation.id)}
                       >
@@ -164,24 +165,34 @@ const Messages = () => {
                             <Mail className="h-5 w-5 text-hotel-600" />
                           </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="font-medium truncate">{conversation.name}</p>
-                            <span className="text-xs text-muted-foreground shrink-0">{conversation.time}</span>
+                        <div className="flex-1">
+                          <div className="flex flex-col">
+                            <p className="font-medium break-words">{conversation.name}</p>
+                            <span className="text-xs text-muted-foreground break-words">
+                              {conversation.time}
+                            </span>
                           </div>
-                          <p className="text-sm text-muted-foreground truncate">{conversation.lastMessage}</p>
+                          <p className="text-sm text-muted-foreground break-words mt-1">
+                            {conversation.lastMessage}
+                          </p>
                         </div>
                       </div>
                     ))}
 
-                    {emailConversations.length === 0 && (
-                      <div className="text-sm text-muted-foreground p-3">Chưa có hội thoại email.</div>
+                    {visibleCount < emailConversations.length && (
+                      <div className="flex justify-center p-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => setVisibleCount((prev) => prev + 10)}
+                        >
+                          Hiển thị thêm tin nhắn
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </ScrollArea>
               </TabsContent>
 
-              {/* Các tab nền tảng ngoài: card link */}
               {EXTERNAL_LINKS.map((l) => (
                 <TabsContent key={l.value} value={l.value} className="min-w-0">
                   <ExternalLinkCard value={l.value} />
@@ -213,11 +224,9 @@ const Messages = () => {
                             <div
                               className={`max-w-[70%] ${isHotel ? "bg-hotel-500 text-white" : "bg-secondary"} rounded-lg px-4 py-2 break-words`}
                             >
-                              <p
+                              <div
                                 dangerouslySetInnerHTML={{
-                                  __html:
-                                    (message.snippet?.replace(/Vào.*?đã viết:.*/is, "").trim()) ||
-                                    message.subject || "(no content)",
+                                  __html: cleanEmailBody(message.body || message.subject || "(no content)"),
                                 }}
                               />
                               <p
@@ -226,13 +235,13 @@ const Messages = () => {
                                 {message.date ? new Date(message.date).toLocaleTimeString() : ""}
                               </p>
                             </div>
+
                           </div>
                         );
                       })}
                     </div>
                   </ScrollArea>
 
-                  {/* Input */}
                   {/* Input */}
                   <div className="p-4 border-t bg-white">
                     <div className="flex items-center gap-2">
@@ -243,8 +252,8 @@ const Messages = () => {
                         className="flex-1"
                       />
                       <Button
-                      variant="outline"
-                      className="text-white bg-blue-500 hover:text-blue-500 hover:bg-white hover:border-blue-500"
+                        variant="outline"
+                        className="text-white bg-blue-500 hover:text-blue-500 hover:bg-white hover:border-blue-500"
                         onClick={async () => {
                           const firstMessage = selectedMessages[0];
                           if (!firstMessage) return;

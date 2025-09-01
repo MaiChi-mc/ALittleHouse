@@ -25,7 +25,16 @@ router.post('/login', (req, res) => {
       return res.status(400).json({ message: 'Mật khẩu không đúng' });
     }
 
-    const token = jwt.sign({ userId: user.user_id, role: user.role }, jwtSecret, { expiresIn: '1h' });
+    // Thêm user_name vào payload
+    const token = jwt.sign(
+      {
+        userId: user.user_id,
+        role: user.role,
+        user_name: user.user_name,
+      },
+      jwtSecret,
+      { expiresIn: '1h' }
+    );
 
     res.status(200).json({
       message: 'Đăng nhập thành công',
@@ -38,6 +47,32 @@ router.post('/login', (req, res) => {
   });
 });
 
+// API quên mật khẩu
+router.post('/forgot-password', (req, res) => {
+  const { email, newPassword } = req.body;
+
+  // Kiểm tra người dùng
+  const query = 'SELECT * FROM users WHERE user_email = ?';
+  queryWithRetry(query, [email], (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Lỗi khi truy vấn cơ sở dữ liệu' });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ message: 'Email không tồn tại' });
+    }
+
+    // Cập nhật mật khẩu mới
+    const updatePasswordQuery = 'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE user_email = ?';
+    queryWithRetry(updatePasswordQuery, [newPassword, email], (err2) => {
+      if (err2) {
+        return res.status(500).json({ message: 'Lỗi khi cập nhật mật khẩu' });
+      }
+      res.json({ message: 'Đặt lại mật khẩu thành công!' });
+    });
+  });
+});
+
 // -------------------------------------API Dashboard-------------------------------------
 router.get("/activity-logs", (req, res) => {
   queryWithRetry(`
@@ -45,17 +80,14 @@ router.get("/activity-logs", (req, res) => {
       al.log_id,
       al.action_type,
       al.description,
-      al.performed_by,
       al.performed_at,
       b.guest_name,
       b.booking_status,
       b.booking_source,
-      r.room_number,
-      u.user_name
+      r.room_number
     FROM activity_logs al
     LEFT JOIN bookings b ON al.booking_id = b.booking_id
     LEFT JOIN rooms r ON b.room_id = r.room_id
-    LEFT JOIN users u ON al.user_id = u.user_id
     ORDER BY al.performed_at DESC
     LIMIT 50
   `, (err, rows) => {
@@ -67,8 +99,8 @@ router.get("/activity-logs", (req, res) => {
     const mapActionType = {
       create_booking: 'Tạo đặt phòng',
       update_booking: 'Cập nhật đặt phòng',
-      update_guest_info: 'Cập nhật thông tin khách',
-      cancel_booking: 'Hủy đặt phòng'
+      cancel_booking: 'Hủy đặt phòng',
+      update_room_status: 'Cập nhật trạng thái phòng'
     };
 
     rows.forEach(log => {
@@ -78,6 +110,7 @@ router.get("/activity-logs", (req, res) => {
     res.json(rows);
   });
 });
+
 
 // -------------------------------------API Create Account-------------------------------------
 router.post('/create-account', (req, res) => {
@@ -197,6 +230,7 @@ router.get('/rooms_bookings/current', (req, res) => {
   });
 });
 
+//API thêm booking
 router.post('/bookings', (req, res) => {
   const {
     room_number,
@@ -214,8 +248,12 @@ router.post('/bookings', (req, res) => {
     return res.status(400).json({ message: 'Thiếu dữ liệu bắt buộc' });
   }
 
-  if (new Date(check_out) <= new Date(check_in)) {
+  if (new Date(check_out) < new Date(check_in)) {
     return res.status(400).json({ error: "Ngày check-out phải lớn hơn ngày check-in" });
+  }
+
+  if (new Date(check_in) < new Date(booking_date) || new Date(check_out) < new Date(booking_date)) {
+    return res.status(400).json({ error: "Ngày check-in và check-out phải lớn hơn ngày đặt" });
   }
 
   const checkRoomQuery = 'SELECT room_id FROM rooms WHERE room_number = ?';
@@ -227,7 +265,8 @@ router.post('/bookings', (req, res) => {
 
     const checkOverlapQuery = `
       SELECT booking_id FROM bookings
-      WHERE room_id = ?
+      WHERE room_id = ? 
+        AND booking_status <> 'Cancelled'
         AND (
           (check_in <= ? AND check_out >= ?)
           OR
@@ -283,12 +322,9 @@ router.post('/bookings', (req, res) => {
             };
 
             addActivityLog(
-              insertResult.insertId, // Sửa bookingId thành insertResult.insertId
-              req.user ? req.user.user_id : null,
+              insertResult.insertId,
               "create_booking",
-              `Tạo đặt phòng cho khách ${guest_name} - Phòng ${room_number}`,
-              "user",
-              () => { }
+              `Tạo mới đơn đặt phòng cho khách ${guest_name} - Phòng ${room_number}`
             );
 
             res.status(201).json(newBooking);
@@ -299,51 +335,139 @@ router.post('/bookings', (req, res) => {
   });
 });
 
+// API sửa booking
 router.put('/bookings/:booking_id', (req, res) => {
   const { booking_id } = req.params;
-  const { field, value } = req.body;
+  const updates = req.body;
 
-  const allowedFields = ['guest_name', 'phone_number', 'booking_source', 'booking_status', 'check_in', 'check_out', 'amount_received', 'booking_date'];
-  if (!allowedFields.includes(field)) {
-    return res.status(400).json({ message: 'Trường không hợp lệ' });
+  const allowedFields = [
+    'guest_name', 'phone_number', 'booking_source',
+    'booking_status', 'check_in', 'check_out',
+    'amount_received', 'booking_date'
+  ];
+
+  const fields = Object.keys(updates).filter(f => allowedFields.includes(f));
+  if (fields.length === 0) {
+    return res.status(400).json({ message: 'Không có trường hợp lệ để update' });
   }
 
-  const sql = `UPDATE bookings SET ${field} = ?, updated_at = CURRENT_TIMESTAMP WHERE booking_id = ?`;
-  queryWithRetry(sql, [value, booking_id], (err, result) => {
-    if (err) {
-      console.error("Lỗi update booking BE:", err);
-      return res.status(500).json({ message: 'Lỗi cập nhật CSDL' });
+  // Nếu có check_in hoặc check_out -> kiểm tra ngày
+  const hasDateUpdate = fields.includes('check_in') || fields.includes('check_out');
+
+  // Lấy booking hiện tại để biết room_id và check_in/check_out gốc
+  const getBookingQuery = `SELECT * FROM bookings WHERE booking_id = ?`;
+  queryWithRetry(getBookingQuery, [booking_id], (err, bookingResult) => {
+    if (err) return res.status(500).json({ message: 'Lỗi khi lấy thông tin booking' });
+    if (bookingResult.length === 0) return res.status(404).json({ message: 'Booking không tồn tại' });
+
+    const booking = bookingResult[0];
+    const room_id = booking.room_id;
+
+    // Nếu không update ngày, bỏ qua kiểm tra overlap
+    if (!hasDateUpdate) {
+      return applyUpdate();
     }
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Booking không tồn tại' });
+
+    const newCheckIn = updates.check_in || booking.check_in;
+    const newCheckOut = updates.check_out || booking.check_out;
+
+    // Kiểm tra hợp lệ của ngày
+    if (new Date(newCheckOut) < new Date(newCheckIn)) {
+      return res.status(400).json({ error: "Ngày check-out phải lớn hơn ngày check-in" });
     }
-    res.json({ message: `Đã cập nhật ${field} thành công`, field, value });
+    if (new Date(newCheckIn) < new Date(booking.booking_date) || new Date(newCheckOut) < new Date(booking.booking_date)) {
+      return res.status(400).json({ error: "Ngày check-in và check-out phải lớn hơn ngày đặt" });
+    }
+
+    // Kiểm tra overlap với các booking khác
+    const overlapQuery = `
+      SELECT booking_id FROM bookings
+      WHERE room_id = ?
+        AND booking_id <> ?
+        AND (
+          (check_in <= ? AND check_out >= ?)
+          OR (check_in <= ? AND check_out >= ?)
+          OR (? <= check_in AND ? >= check_out)
+        )
+    `;
+    queryWithRetry(
+      overlapQuery,
+      [room_id, booking_id, newCheckIn, newCheckIn, newCheckOut, newCheckOut, newCheckIn, newCheckOut],
+      (err, overlapResults) => {
+        if (err) return res.status(500).json({ message: 'Lỗi kiểm tra phòng trống' });
+        if (overlapResults.length > 0) {
+          return res.status(409).json({ message: 'Phòng không trống trong thời gian này' });
+        }
+        applyUpdate();
+      }
+    );
+
+    // Hàm thực hiện UPDATE
+    function applyUpdate() {
+      const setClause = fields.map(f => `${f} = ?`).join(', ');
+      const values = fields.map(f => updates[f]);
+
+      const sql = `UPDATE bookings SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE booking_id = ?`;
+      queryWithRetry(sql, [...values, booking_id], (err, result) => {
+        if (err) return res.status(500).json({ message: 'Lỗi cập nhật CSDL' });
+        if (result.affectedRows === 0) return res.status(404).json({ message: 'Booking không tồn tại' });
+
+        pool.query(
+          `SELECT r.room_number, b.guest_name
+          FROM bookings b
+          JOIN rooms r ON b.room_id = r.room_id
+          WHERE b.booking_id = ?`,
+          [booking_id],
+          (err, rows) => {
+            if (err) {
+              console.error(err);
+              return res.status(500).send("Lỗi truy vấn room_number");
+            }
+            const room_number = rows[0]?.room_number || '';
+            const guest_name = rows[0]?.guest_name || '';
+
+            addActivityLog(
+              booking_id,
+              "update_booking",
+              `Cập nhật thông tin khách ${guest_name} - Phòng ${room_number}`
+            );
+          }
+        );
+
+        res.json({ message: 'Cập nhật thành công', fields });
+      });
+    }
   });
 });
 
-router.put("/:room_id/status", (req, res) => {
+
+// API đổi room_status
+router.put('/:room_id/status', (req, res) => {
   const { room_id } = req.params;
   const { status } = req.body;
 
-  queryWithRetry("SELECT status FROM rooms WHERE room_id = ?", [room_id], (err, rows) => {
+  if (!status) return res.status(400).json({ error: "Thiếu status" });
+
+  queryWithRetry("SELECT room_number, status FROM rooms WHERE room_id = ?", [room_id], (err, rows) => {
     if (err) {
-      console.error(err);
+      console.error("Lỗi SELECT room:", err);
       return res.status(500).json({ error: "Lỗi server" });
     }
+    if (rows.length === 0) return res.status(404).json({ error: "Không tìm thấy phòng" });
 
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "Không tìm thấy phòng" });
-    }
+    const { room_number, status: currentStatus } = rows[0];
 
-    if (rows[0].status === "Occupied") {
-      return res.status(400).json({ error: "Không thể đổi trạng thái khi phòng đang được thuê" });
-    }
-
-    queryWithRetry("UPDATE rooms SET status = ? WHERE room_id = ?", [status, room_id], (err) => {
+    queryWithRetry("UPDATE rooms SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE room_id = ?", [status, room_id], (err, result) => {
       if (err) {
-        console.error(err);
+        console.error("Lỗi UPDATE room:", err);
         return res.status(500).json({ error: "Lỗi server" });
       }
+
+      addActivityLog(
+        null,
+        "update_room_status",
+        `Thay đổi trạng thái phòng ${room_number} thành ${status}`
+      );
 
       res.json({ message: "Cập nhật trạng thái thành công", room_id, status });
     });
@@ -351,6 +475,7 @@ router.put("/:room_id/status", (req, res) => {
 });
 
 // -------------------------------------API Booking-------------------------------------
+// API lấy tất cả booking không bao gồm Cancelled (dành cho trang Booking)
 router.get('/bookings/all', (req, res) => {
   const query = `
     SELECT 
@@ -385,28 +510,64 @@ router.get('/bookings/all', (req, res) => {
   });
 });
 
+// API xóa booking
 router.delete('/bookings/:booking_id', (req, res) => {
   const { booking_id } = req.params;
 
-  const checkBookingQuery = 'SELECT 1 FROM bookings WHERE booking_id = ?';
-  queryWithRetry(checkBookingQuery, [booking_id], (err, results) => {
+  const selectSql = `
+    SELECT b.guest_name, r.room_number, r.room_id
+    FROM bookings b
+    JOIN rooms r ON b.room_id = r.room_id
+    WHERE b.booking_id = ?
+  `;
+  queryWithRetry(selectSql, [booking_id], (err, rows) => {
     if (err) {
+      console.error("Lỗi SELECT booking:", err);
       return res.status(500).json({ message: 'Lỗi truy vấn cơ sở dữ liệu' });
     }
-    if (results.length === 0) {
+    if (rows.length === 0) {
       return res.status(404).json({ message: 'Booking không tồn tại' });
     }
 
-    const deleteBookingQuery = 'DELETE FROM bookings WHERE booking_id = ?';
-    queryWithRetry(deleteBookingQuery, [booking_id], (err, result) => {
+    const { guest_name, room_number, room_id } = rows[0];
+
+    // Thay vì xóa, cập nhật trạng thái thành Cancelled
+    const updateBookingSql = `
+      UPDATE bookings
+      SET booking_status = 'Cancelled'
+      WHERE booking_id = ?
+    `;
+    queryWithRetry(updateBookingSql, [booking_id], (err) => {
       if (err) {
-        return res.status(500).json({ message: 'Lỗi khi xóa booking' });
+        console.error("Lỗi khi cập nhật trạng thái booking:", err);
+        return res.status(500).json({ message: 'Lỗi khi cập nhật trạng thái booking' });
       }
 
-      res.status(200).json({ message: 'Xóa booking thành công' });
+      // Cập nhật trạng thái phòng thành Available
+      const updateRoomSql = `
+        UPDATE rooms
+        SET status = 'Available'
+        WHERE room_id = ?
+      `;
+      queryWithRetry(updateRoomSql, [room_id], (err) => {
+        if (err) {
+          console.error("Lỗi khi cập nhật trạng thái phòng:", err);
+          return res.status(500).json({ message: 'Lỗi khi cập nhật trạng thái phòng' });
+        }
+
+        // Ghi lại lịch sử hoạt động
+        addActivityLog(
+          booking_id,
+          "cancel_booking",
+          `Hủy đơn đặt phòng của ${guest_name} - Phòng ${room_number}`
+        );
+
+        res.status(200).json({ message: 'Đã hủy booking và cập nhật phòng thành công' });
+      });
     });
   });
 });
+
 
 // -------------------------------------API Analytics-------------------------------------
 router.get('/rooms', (req, res) => {
@@ -431,6 +592,71 @@ router.get('/rooms', (req, res) => {
     }
     res.json(results);
   });
+});
+
+// API lấy tất cả booking có cả Cancelled (dành cho trang Analytics)
+router.get('/bookings/all_with_cancelled', (req, res) => {
+  const query = `
+    SELECT 
+      r.room_id,
+      r.room_number,
+      r.floor,
+      r.price,
+      b.booking_id,
+      b.guest_name,
+      b.phone_number,
+      DATE_FORMAT(b.booking_date, '%Y-%m-%d %H:%i:%s') AS booking_date,
+      b.booking_source,
+      b.booking_status,
+      b.amount_received,
+      DATE_FORMAT(b.check_in, '%Y-%m-%d') AS check_in,
+      DATE_FORMAT(b.check_out, '%Y-%m-%d') AS check_out,
+      b.created_at,
+      b.updated_at
+    FROM rooms r
+    LEFT JOIN bookings b 
+      ON b.room_id = r.room_id
+      AND b.booking_status IN ('Confirmed', 'Checked-in', 'Checked-out', 'Cancelled')
+    ORDER BY r.floor, r.room_number, b.check_in ASC
+  `;
+
+  queryWithRetry(query, (err, results) => {
+    if (err) {
+      console.error("Lỗi truy vấn:", err);
+      return res.status(500).json({ message: 'Lỗi truy vấn CSDL.' });
+    }
+    res.json(results);
+  });
+});
+
+router.get("/search", (req, res) => {
+  const { keyword } = req.query;
+  if (!keyword) return res.status(400).json({ error: "Thiếu từ khóa tìm kiếm" });
+
+  const searchKey = `%${keyword}%`;
+
+  const sql = `
+    SELECT b.*, r.room_number
+    FROM bookings b
+      LEFT JOIN rooms r ON b.room_id = r.room_id
+    WHERE LOWER(b.guest_name) LIKE LOWER(?) 
+      OR LOWER(b.phone_number) LIKE LOWER(?)
+      OR LOWER(r.room_number) LIKE LOWER(?) 
+      OR DATE_FORMAT(b.check_in, '%Y-%m-%d') LIKE ?
+      OR DATE_FORMAT(b.check_out, '%Y-%m-%d') LIKE ?
+      OR LOWER(b.booking_source) LIKE LOWER(?)
+    ORDER BY b.booking_date DESC
+    LIMIT 50;
+  `;
+
+  pool.query(
+    sql,
+    [searchKey, searchKey, searchKey, searchKey, searchKey, searchKey],
+    (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    }
+  );
 });
 
 module.exports = router;

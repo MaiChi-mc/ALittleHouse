@@ -1,17 +1,20 @@
 // backend/services/logService.js
 const { pool, query: queryWithRetry } = require('../services/db'); 
 
-function addActivityLog(bookingId, actionType, description, performedBy, callback) {
+function addActivityLog(booking_id, action_type, description) {
   const query = `
-    INSERT INTO activity_logs (booking_id, action_type, description, performed_by)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO activity_logs 
+    (booking_id, action_type, description)
+    VALUES (?, ?, ?)
   `;
-  queryWithRetry(query, [bookingId, actionType, description, performedBy], (err) => {
+  queryWithRetry(query, [
+    booking_id,
+    action_type,
+    description
+  ], (err) => {
     if (err) {
-      console.error("Error adding activity log:", err);
-      if (callback) return callback(err);
+      console.error("Error inserting activity log:", err);
     }
-    if (callback) callback();
   });
 }
 

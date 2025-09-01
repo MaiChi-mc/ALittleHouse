@@ -9,7 +9,8 @@ const router = express.Router();
 /** ------------------------------- Queries ------------------------------- */
 const autoCheckinQuery = `
   SELECT booking_id, room_number
-  FROM bookings
+  FROM bookings b
+  LEFT JOIN rooms r ON r.room_id = b.room_id
   WHERE booking_status <> 'Checked-in'
     AND check_in <= CURDATE()
     AND check_out >= CURDATE();
@@ -17,7 +18,8 @@ const autoCheckinQuery = `
 
 const autoCheckoutQuery = `
   SELECT booking_id, room_number
-  FROM bookings
+  FROM bookings b
+  LEFT JOIN rooms r ON r.room_id = b.room_id
   WHERE check_out < CURDATE()
     AND booking_status = 'Checked-in';
 `;
@@ -55,7 +57,10 @@ router.put("/auto-checkin", (req, res) => {
 
     if (bookings.length > 0) {
       queryWithRetry(
-        `UPDATE bookings SET booking_status = 'Checked-in' WHERE booking_status <> 'Checked-in' AND check_in <= CURDATE() AND check_out >= CURDATE()`,
+        `UPDATE bookings SET booking_status = 'Checked-in' 
+        WHERE booking_status NOT IN ('Checked-in', 'Cancelled')
+          AND check_in <= CURDATE() 
+          AND check_out >= CURDATE()`,
         (err) => {
           if (err) {
             console.error("Auto check-in update error:", err);
@@ -65,10 +70,8 @@ router.put("/auto-checkin", (req, res) => {
           bookings.forEach((b) => {
             addActivityLog(
               b.booking_id,
-              null,
               "update_booking",
               `Hệ thống tự động check-in - Phòng ${b.room_number}`,
-              "cronJob",
               () => {}
             );
           });
@@ -107,10 +110,8 @@ router.put("/auto-checkout", (req, res) => {
           bookings.forEach((b) => {
             addActivityLog(
               b.booking_id,
-              null,
               "update_booking",
               `Hệ thống tự động check-out - Phòng ${b.room_number}`,
-              "cronJob",
               () => {}
             );
           });
@@ -139,7 +140,11 @@ router.put("/auto-fix-rooms", (req, res) => {
 
     if (rooms.length > 0) {
       queryWithRetry(
-        `UPDATE rooms r LEFT JOIN (SELECT room_id FROM bookings WHERE booking_status = 'Checked-in') AS active_bookings ON r.room_id = active_bookings.room_id SET r.status = 'Available' WHERE active_bookings.room_id IS NULL AND r.status = 'Occupied'`,
+        `UPDATE rooms r 
+        LEFT JOIN 
+        (SELECT room_id FROM bookings WHERE booking_status = 'Checked-in') AS active_bookings ON r.room_id = active_bookings.room_id 
+        SET r.status = 'Available' 
+        WHERE active_bookings.room_id IS NULL AND r.status = 'Occupied'`,
         (err) => {
           if (err) {
             console.error("Auto fix room status update error:", err);
@@ -149,10 +154,8 @@ router.put("/auto-fix-rooms", (req, res) => {
           rooms.forEach((r) => {
             addActivityLog(
               null,
-              r.room_id,
               "update_room",
               `Hệ thống tự động sửa trạng thái phòng ${r.room_id}`,
-              "cronJob",
               () => {}
             );
           });
@@ -182,7 +185,10 @@ cron.schedule("0 0 * * *", () => {
     }
     if (bookingsCheckin.length > 0) {
       queryWithRetry(
-        `UPDATE bookings SET booking_status = 'Checked-in' WHERE booking_status <> 'Checked-in' AND check_in <= CURDATE() AND check_out >= CURDATE()`,
+        `UPDATE bookings SET booking_status = 'Checked-in' 
+        WHERE booking_status NOT IN ('Checked-in', 'Cancelled')
+          AND check_in <= CURDATE() 
+          AND check_out >= CURDATE()`,
         (err) => {
           if (err) {
             console.error("Cron check-in update error:", err);
@@ -191,10 +197,8 @@ cron.schedule("0 0 * * *", () => {
           bookingsCheckin.forEach((b) => {
             addActivityLog(
               b.booking_id,
-              null,
               "update_booking",
               `Hệ thống tự động check-in - Phòng ${b.room_number}`,
-              "cronJob",
               () => {}
             );
           });
@@ -210,7 +214,10 @@ cron.schedule("0 0 * * *", () => {
       }
       if (bookingsCheckout.length > 0) {
         queryWithRetry(
-          `UPDATE bookings SET booking_status = 'Checked-out' WHERE check_out < CURDATE() AND booking_status = 'Checked-in'`,
+          `UPDATE bookings 
+          SET booking_status = 'Checked-out' 
+          WHERE check_out < CURDATE() 
+            AND booking_status = 'Checked-in'`,
           (err) => {
             if (err) {
               console.error("Cron check-out update error:", err);
@@ -219,10 +226,8 @@ cron.schedule("0 0 * * *", () => {
             bookingsCheckout.forEach((b) => {
               addActivityLog(
                 b.booking_id,
-                null,
                 "update_booking",
                 `Hệ thống tự động check-out - Phòng ${b.room_number}`,
-                "cronJob",
                 () => {}
               );
             });
@@ -247,10 +252,8 @@ cron.schedule("0 0 * * *", () => {
               rooms.forEach((r) => {
                 addActivityLog(
                   null,
-                  r.room_id,
                   "update_room",
                   `Hệ thống tự động sửa trạng thái phòng ${r.room_id}`,
-                  "cronJob",
                   () => {}
                 );
               });

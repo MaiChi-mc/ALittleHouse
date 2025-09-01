@@ -1,5 +1,27 @@
 import { useEffect, useState, useCallback } from "react";
 
+function getEmailBody(payload: any): string {
+  if (!payload) return "";
+
+  if (payload.mimeType === "text/html") {
+    return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+  }
+
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      if (part.mimeType === "text/html" && part.body?.data) {
+        return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      }
+    }
+  }
+
+  if (payload.mimeType === "text/plain") {
+    return `<pre>${atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))}</pre>`;
+  }
+
+  return "";
+}
+
 export interface EmailMessage { // mô tả một email
   from: string;
   subject: string;
@@ -17,7 +39,7 @@ export function useEmail() {
   const [loading, setLoading] = useState(false); // hiển thị trạng thái đang tải
   const [error, setError] = useState<string | null>(null);
 
-  
+
   // Hàm lấy danh sách email (email thread)
   const fetchThreads = useCallback(async () => {
     try {
@@ -31,7 +53,17 @@ export function useEmail() {
       }
 
       const data = await res.json();
-      setThreads(data);
+
+      const parsedData = data.map((thread: any) => ({
+        ...thread,
+        messages: thread.messages.map((msg: any) => ({
+          ...msg,
+          body: getEmailBody(msg.payload), // xử lý payload thành HTML text
+        })),
+      }));
+
+      setThreads(parsedData);
+
     } catch (err: any) {
       setError(err.message || "Error");
     } finally {
@@ -48,53 +80,53 @@ export function useEmail() {
     inReplyTo,
   }: {
     to: string;
-    subject: string; 
+    subject: string;
     body: string;
     threadId?: string;
     inReplyTo?: string;
   }) => {
-  try {
-    // kiểm tra lỗi trong Tab Console
-    console.log("sendEmail() called with:");
-    console.log("to:", to);
-    console.log("subject:", subject);
-    console.log("body:", body);
+    try {
+      // kiểm tra lỗi trong Tab Console
+      console.log("sendEmail() called with:");
+      console.log("to:", to);
+      console.log("subject:", subject);
+      console.log("body:", body);
 
-    const res = await fetch("http://localhost:8080/api/email/send", {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json", // báo server data được gửi ở dạng json
-      },
-      body: JSON.stringify({
-        to: to.replace(/[<>]/g, "").trim(),
-        subject,
-        body,
-        threadId,
-        inReplyTo,
-    }),
- // dữ liệu được json.stringify thành chuỗi json
-    });
+      const res = await fetch("http://localhost:8080/api/email/send", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json", // báo server data được gửi ở dạng json
+        },
+        body: JSON.stringify({
+          to: to.replace(/[<>]/g, "").trim(),
+          subject,
+          body,
+          threadId,
+          inReplyTo,
+        }),
+        // dữ liệu được json.stringify thành chuỗi json
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("Send email failed:", errText);
-      throw new Error("Failed to send email");
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Send email failed:", errText);
+        throw new Error("Failed to send email");
+      }
+
+      await fetchThreads(); // đảm bảo cập nhật lại danh sách sau khi gửi
+
+      return true;
+    } catch (err) {
+      console.error("sendEmail exception:", err);
+      return false;
     }
-
-    await fetchThreads(); // đảm bảo cập nhật lại danh sách sau khi gửi
-
-    return true;
-  } catch (err) {
-    console.error("sendEmail exception:", err);
-    return false;
-  }
-};
+  };
 
   // Polling mỗi 10s
   useEffect(() => {
     fetchThreads();
-    
+
     const interval = setInterval(() => {
       fetchThreads();
     }, 10000); // 10 giây
@@ -111,5 +143,5 @@ export function useEmail() {
 }
 
 // Mục tiêu:
-// Lấy API từ backend để kéo những đoạn hội thoại từ gmail về, sau đó hiển thị nó lên trên UI. 
+// Lấy API từ backend để kéo những đoạn hội thoại từ gmail về, sau đó hiển thị nó lên trên UI.
 // Và gửi email đi, cập nhật lại đoạn hội thoại đó

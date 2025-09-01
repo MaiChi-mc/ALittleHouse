@@ -34,7 +34,7 @@ const RoomManagement = () => {
             element.scrollIntoView({ behavior: "smooth", block: "center" });
             // Highlight tạm thời
             // Gán màu nềg với opacity 100% ban đầu
-            element.style.transition = "background-color 1.5s ease-out";
+            element.style.transition = "background-color 1s ease-out";
             element.style.backgroundColor = "#6dabe8";
             // Sau 1 tick event loop thì giảm opacity xuống
             setTimeout(() => {
@@ -66,9 +66,15 @@ const RoomManagement = () => {
       if (field === "check_in" || field === "check_out") {
         const checkIn = new Date(convertDDMMYYYYtoISO(newEditData.check_in));
         const checkOut = new Date(convertDDMMYYYYtoISO(newEditData.check_out));
+        const booking_date = new Date(convertDDMMYYYYtoISO(newEditData.booking_date));
 
-        if (checkIn && checkOut && checkOut <= checkIn) {
+        if (checkIn && checkOut && checkOut < checkIn) {
           alert("Ngày check-out phải sau ngày check-in");
+          return; // Không cho gọi API update
+        }
+
+        if ((checkIn && booking_date && checkIn < booking_date) || (checkOut && booking_date && checkOut < booking_date)) {
+          alert("Ngày check-in phải sau ngày đặt");
           return; // Không cho gọi API update
         }
       }
@@ -92,8 +98,13 @@ const RoomManagement = () => {
     try {
       const checkIn = new Date(newBooking.check_in);
       const checkOut = new Date(newBooking.check_out);
-      if (checkOut <= checkIn) {
+      const booking_date = new Date(newBooking.booking_date);
+      if (checkOut < checkIn) {
         alert("Ngày check-out phải sau ngày check-in");
+        return;
+      }
+      if ((checkIn < booking_date) || (checkOut < booking_date)) {
+        alert("Ngày check-in và check-out phải sau ngày đặt");
         return;
       }
       const response = await fetch("http://localhost:8080/api/auth/bookings", {
@@ -143,8 +154,13 @@ const RoomManagement = () => {
     // Validation check-in / check-out trước khi update
     const checkIn = new Date(convertDDMMYYYYtoISO(editData.check_in));
     const checkOut = new Date(convertDDMMYYYYtoISO(editData.check_out));
-    if (checkOut <= checkIn) {
+    const booking_date = new Date(convertDDMMYYYYtoISO(editData.booking_date));
+    if (checkOut < checkIn) {
       alert("Ngày check-out phải sau ngày check-in");
+      return;
+    }
+    if ((checkIn < booking_date) || (checkOut < booking_date)) {
+      alert("Ngày check-in và check-out phải sau ngày đặt");
       return;
     }
 
@@ -372,7 +388,7 @@ const RoomManagement = () => {
                 <Button
                   onClick={() => { setEditBookingId(null); setEditData({}); }}
                   variant="outline"
-                  className="bg-grey-500 text-white rounded-xl hover:bg-white hover:text-grey-500 hover:border-grey-500 hover:border focus:outline-none focus:ring-2   shadow-grey-500/50 shadow-lg">
+                  className="bg-grey-500 text-grey-500 rounded-xl hover:bg-gray-500 hover:text-white hover:border-grey-500 hover:border focus:outline-none focus:ring-2 shadow-grey-500/50 shadow-lg">
                   Hủy
                 </Button>
 
@@ -452,7 +468,7 @@ const RoomManagement = () => {
                           <Bed className="h-5 w-5" />
                           <span className="font-medium text-lg">Phòng {room.room_number}</span>
                         </div>
-                        <Badge variant="outline">Phòng {room.floor}</Badge>
+                        <Badge variant="outline">Tầng {room.floor}</Badge>
                         {["Available", "Cleaning", "Maintenance"].includes(room.status) ? (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import MainLayout from "@/components/layout/MainLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { ArrowUp, ArrowDown, } from "lucide-react";
+import { ArrowUp, ArrowDown, Search } from "lucide-react";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import * as XLSX from "xlsx";
 
 // ===== Kiểu dữ liệu gốc từ API (giữ nguyên tiếng Anh để không vướng lỗi union type) =====
@@ -73,12 +73,13 @@ const clampRangeOverlapNights = (aStart: Date, aEnd: Date, bStart: Date, bEnd: D
 
 const Analytics = () => {
   const userRole = typeof window !== "undefined" ? localStorage.getItem("role") : null;
-  const [period, setPeriod] = useState<"day" | "week" | "month" | "quarter" | "year">("month");
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [keyword, setKeyword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("revenue");
 
   useEffect(() => {
     const load = async () => {
@@ -86,61 +87,14 @@ const Analytics = () => {
         setLoading(true);
         const [rRes, bRes] = await Promise.all([
           fetch("http://localhost:8080/api/auth/rooms"),
-          fetch("http://localhost:8080/api/auth/bookings/all"),
+          fetch("http://localhost:8080/api/auth/bookings/all_with_cancelled"),
         ]);
+
         const [rData, bData] = await Promise.all([rRes.json(), bRes.json()]);
-        setRooms(Array.isArray(rData) ? (rData as Room[]) : []);
-        setBookings(Array.isArray(bData) ? (bData as Booking[]) : []);
+        setRooms(Array.isArray(rData) ? rData : []);
+        setBookings(Array.isArray(bData) ? bData : []);
+        setFilteredBookings(Array.isArray(bData) ? bData : []); // gán ban đầu
 
-      } catch (e) {
-        console.error(e);
-        setRooms([]);
-        setBookings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  // Lọc khách theo tháng
-  useEffect(() => {
-    const load = async () => {
-      try {
-        setLoading(true);
-        const [rRes, bRes] = await Promise.all([
-          fetch("http://localhost:8080/api/auth/rooms"),
-          fetch("http://localhost:8080/api/auth/bookings/all"),
-        ]);
-        const [rData, bData] = await Promise.all([rRes.json(), bRes.json()]);
-
-        const roomsData = Array.isArray(rData) ? (rData as Room[]) : [];
-        const bookingsData = Array.isArray(bData) ? (bData as Booking[]) : [];
-
-        setRooms(roomsData);
-        setBookings(bookingsData);
-
-        // --- Lọc booking theo tháng được chọn ---
-        // --- Lọc booking theo khoảng thời gian (check_in - check_out) ---
-        if (!bookingsData || bookingsData.length === 0) {
-          setFilteredBookings([]);
-        } else {
-          const month = selectedMonth.getMonth(); // 0-11
-          const year = selectedMonth.getFullYear();
-
-          const startOfMonth = new Date(year, month, 1);
-          const endOfMonth = new Date(year, month + 1, 0); // ngày cuối tháng
-
-          const filtered = bookingsData.filter((b) => {
-            const checkIn = new Date(b.check_in);
-            const checkOut = new Date(b.check_out);
-
-            // booking giao với khoảng thời gian của tháng được chọn
-            return checkOut >= startOfMonth && checkIn <= endOfMonth;
-          });
-
-          setFilteredBookings(filtered);
-        }
       } catch (e) {
         console.error(e);
         setRooms([]);
@@ -150,9 +104,58 @@ const Analytics = () => {
         setLoading(false);
       }
     };
-
     load();
-  }, [selectedMonth]); // chạy lại khi đổi tháng
+  }, []);
+
+
+  useEffect(() => {
+    if (!keyword) {
+      setFilteredBookings(bookings);
+      return;
+    }
+
+    const search = async () => {
+      try {
+        const res = await fetch(
+          `http://localhost:8080/api/auth/search?keyword=${encodeURIComponent(keyword)}`
+        );
+        if (!res.ok) {
+          setFilteredBookings([]);
+          return;
+        }
+        const data = await res.json();
+        setFilteredBookings(Array.isArray(data) ? data : []);
+      } catch {
+        setFilteredBookings([]);
+      }
+    };
+
+    const timeoutId = setTimeout(search, 300); // debounce 300ms
+    return () => clearTimeout(timeoutId);
+  }, [keyword, bookings]);
+
+
+
+
+  // Lọc khách theo tháng
+  useEffect(() => {
+    if (!bookings.length || keyword.trim()) return;
+    // không lọc theo tháng nếu đang tìm kiếm
+
+    const month = selectedMonth.getMonth();
+    const year = selectedMonth.getFullYear();
+    const startOfMonth = new Date(year, month, 1);
+    const endOfMonth = new Date(year, month + 1, 0);
+
+    const filtered = bookings.filter((b) => {
+      const checkIn = new Date(b.check_in);
+      const checkOut = new Date(b.check_out);
+      return checkOut >= startOfMonth && checkIn <= endOfMonth;
+    });
+
+    setFilteredBookings(filtered);
+  }, [selectedMonth, bookings, keyword]);
+  // chạy lại khi đổi tháng
 
 
   // ---- Chuẩn hoá & giả định tính doanh thu ----
@@ -629,7 +632,7 @@ const Analytics = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="revenue" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger
               value="revenue"
@@ -806,57 +809,80 @@ const Analytics = () => {
                 <CardTitle>Danh sách khách hàng theo tháng</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <form onSubmit={(e) => e.preventDefault()}>
+                    <Input
+                      type="search"
+                      placeholder="Tìm kiếm khách hàng..."
+                      value={keyword}
+                      onChange={(e) => setKeyword(e.target.value)}
+                      className="w-full pl-8"
+                    />
+
+                  </form>
+
+                </div>
                 <ResponsiveContainer width="80%" height="100%">
                   <div>
                     <table className="table-fixed w-full border">
                       <thead className="bg-gray-100">
                         <tr>
-                          <th className="border px-3 py-2 w-14">STT</th>
-                          <th className="border px-3 py-2 w-20">Phòng</th>
+                          <th className="border px-2 py-2 w-12">STT</th>
+                          <th className="border px-2 py-2 w-16">Phòng</th>
                           <th className="border px-3 py-2 w-40">Tên KH</th>
-                          <th className="border px-3 py-2 w-44">SĐT</th>
+                          <th className="border px-3 py-2 w-40">SĐT</th>
                           <th className="border px-3 py-2 w-32">Ngày check-in</th>
                           <th className="border px-3 py-2 w-32">Ngày check-out</th>
-                          <th className="border px-3 py-2 w-24">Nguồn đặt</th>
+                          <th className="border px-3 py-2 w-32">Nguồn đặt</th>
                           <th className="border px-3 py-2 w-32">Trạng thái booking</th>
                           <th className="border px-3 py-2 w-28">Ngày đặt</th>
                           <th className="border px-3 py-2 w-28">Tổng tiền</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredBookings
-                          .sort((a, b) => a.room_id - b.room_id) // sắp xếp theo ngày check-in từ nhỏ đến lớn
-                          .map((b, index) => {
-                            const room = rooms.find(r => r.room_id === b.room_id); // tìm room tương ứng
-                            return (
-                              <tr key={b.booking_id} className="text-center hover:bg-gray-50">
-                                <td className="border px-3 py-2">{index + 1}</td>
-                                <td className="border px-3 py-2">{room?.room_number ?? "-"}</td>
-                                <td className="border px-3 py-2">{b.guest_name}</td>
-                                <td className="border px-3 py-2">{b.phone_number ?? "-"}</td>
-                                <td className="border px-3 py-2">
-                                  {new Date(b.check_in).toLocaleDateString("vi-VN")}
-                                </td>
-                                <td className="border px-3 py-2">
-                                  {new Date(b.check_out).toLocaleDateString("vi-VN")}
-                                </td>
-                                <td className="border px-3 py-2">{b.booking_source ?? "-"}</td>
-                                <td className="border px-3 py-2">{b.booking_status ?? "-"}</td>
-                                <td className="border px-3 py-2">
-                                  {new Date(b.booking_date).toLocaleDateString("vi-VN")}
-                                </td>
-                                <td className="border px-3 py-2">
-                                  {b.amount_received != null
-                                    ? Number(b.amount_received).toLocaleString("vi-VN")
-                                    : "-"}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                        {loading ? (
+                          <tr>
+                            <td colSpan={10} className="text-center py-4">Đang tải...</td>
+                          </tr>
+                        ) : filteredBookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="text-center py-4">Không có dữ liệu</td>
+                          </tr>
+                        ) : (
+                          filteredBookings
+                            .sort((a, b) => a.room_id - b.room_id) // sắp xếp theo ngày check-in từ nhỏ đến lớn
+                            .map((b, index) => {
+                              const room = rooms.find(r => r.room_id === b.room_id); // tìm room tương ứng
+                              return (
+                                <tr key={b.booking_id} className="text-center hover:bg-blue-100">
+                                  <td className="border px-3 py-2">{index + 1}</td>
+                                  <td className="border px-3 py-2">{room?.room_number ?? "-"}</td>
+                                  <td className="border px-3 py-2">{b.guest_name}</td>
+                                  <td className="border px-3 py-2">{b.phone_number ?? "-"}</td>
+                                  <td className="border px-3 py-2">
+                                    {new Date(b.check_in).toLocaleDateString("vi-VN")}
+                                  </td>
+                                  <td className="border px-3 py-2">
+                                    {new Date(b.check_out).toLocaleDateString("vi-VN")}
+                                  </td>
+                                  <td className="border px-3 py-2">{b.booking_source ?? "-"}</td>
+                                  <td className="border px-3 py-2">{b.booking_status ?? "-"}</td>
+                                  <td className="border px-3 py-2">
+                                    {new Date(b.booking_date).toLocaleDateString("vi-VN")}
+                                  </td>
+                                  <td className="border px-3 py-2">
+                                    {b.amount_received != null
+                                      ? Number(b.amount_received).toLocaleString("vi-VN")
+                                      : "-"}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                        )}
                       </tbody>
                     </table>
                   </div>
-
                 </ResponsiveContainer>
               </CardContent>
             </Card>

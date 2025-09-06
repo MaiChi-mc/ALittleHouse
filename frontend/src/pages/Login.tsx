@@ -40,7 +40,6 @@ export default function AuthForm() {
     try {
       setResetMessage('');
       await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/forgot-password`, {
-        // API này backend nhận email (đúng như bạn viết)
         email,
         newPassword,
       });

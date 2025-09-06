@@ -6,9 +6,9 @@ require('dotenv').config(); // tải biến môi trường từ file .env
 const db = require('./services/db'); // kết nối DB
 
 // Import các route
+const authRouter = require('./routes/auth'); 
 const gmailRoutes = require('./routes/gmail');
 const oauthRoutes = require('./routes/oauth');
-const authRouter = require('./routes/auth'); 
 const cronJobsRouter = require('./routes/cronJobs'); // Import cron jobs
 
 const app = express();

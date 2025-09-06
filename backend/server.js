@@ -3,6 +3,7 @@ const cors = require('cors'); // cho phép truy cập từ frontend khác domain
 const bodyParser = require('body-parser');
 const session = require('cookie-session');
 require('dotenv').config(); // tải biến môi trường từ file .env
+const db = require('./services/db'); // kết nối DB
 
 // Import các route
 const gmailRoutes = require('./routes/gmail');
@@ -61,7 +62,6 @@ app.get('/test-db', (req, res) => {
     res.send(`DB connected! Server time: ${results[0].now}`);
   });
 });
-
 
 // Đây là file entry point chính của backend
 // Vai trò khởi chạy server và kết nối các middleware để phục vụ API gmail

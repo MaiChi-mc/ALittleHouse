@@ -4,8 +4,8 @@ require('dotenv').config();
 
 let pool;
 
-if (process.env.MYSQLHOST) {
-  // Kết nối bằng biến môi trường Railway/Render
+if (process.env.MYSQLHOST && process.env.MYSQLUSER) {
+  // 👉 Kết nối bằng biến môi trường Railway/Render
   pool = mysql.createPool({
     host: process.env.MYSQLHOST,
     port: process.env.MYSQLPORT || 3306,
@@ -19,8 +19,9 @@ if (process.env.MYSQLHOST) {
     queueLimit: 0,
     connectTimeout: 20000,
   });
+  console.log("✅ Connected to Railway MySQL using env variables");
 } else {
-  // Fallback khi chạy local (DATABASE_URL hoặc config tay)
+  // 👉 Fallback khi chạy local (DATABASE_URL hoặc config tay)
   const dbUrl =
     process.env.DATABASE_URL ||
     'mysql://root:Chi%40261189@127.0.0.1:3306/hotel_management';
@@ -40,6 +41,7 @@ if (process.env.MYSQLHOST) {
     queueLimit: 0,
     connectTimeout: 20000,
   });
+  console.log("✅ Connected to local MySQL");
 }
 
 // Wrapper cho pool.query
@@ -56,7 +58,7 @@ function queryWithRetry(sql, params, cb) {
         retries > 0 &&
         ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ETIMEDOUT'].includes(err.code)
       ) {
-        console.warn(`MySQL connection lost (${err.code}), retrying...`);
+        console.warn(`⚠️ MySQL connection lost (${err.code}), retrying...`);
         return runQuery(retries - 1);
       }
       if (cb) return cb(err, results, fields);

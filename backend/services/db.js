@@ -1,22 +1,31 @@
 const mysql = require('mysql2');
+const url = require('url');
+require('dotenv').config();
 
-// Tạo pool
+// Parse DATABASE_URL từ biến môi trường
+const dbUrl = process.env.DATABASE_URL || "mysql://root:Chi%40261189@127.0.0.1:3306/hotel_management";
+const parsedUrl = url.parse(dbUrl);
+
+// Lấy user và password từ auth part
+const [user, password] = parsedUrl.auth.split(':');
+
+// Tạo pool từ thông tin Railway
 const pool = mysql.createPool({
-  host: '127.0.0.1', // hoặc 'localhost'127.0.0.1
-  user: 'root',
-  password: 'Chi@261189',
-  database: 'hotel_management',
-  timezone: '+07:00', // Giữ đúng giờ VN
-  dateStrings: true,   // Trả về chuỗi thay vì Date object
+  host: parsedUrl.hostname,
+  port: parsedUrl.port,
+  user,
+  password,
+  database: parsedUrl.pathname.replace('/', ''), // bỏ dấu "/"
+  timezone: '+07:00',
+  dateStrings: true,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   connectTimeout: 20000
 });
 
-// Wrapper cho pool.query (hỗ trợ cả callback và Promise)
+// Wrapper cho pool.query
 function queryWithRetry(sql, params, cb) {
-  // Nếu params là function => không có params
   if (typeof params === 'function') {
     cb = params;
     params = [];
@@ -30,7 +39,7 @@ function queryWithRetry(sql, params, cb) {
         ['PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ETIMEDOUT'].includes(err.code)
       ) {
         console.warn(`MySQL connection lost (${err.code}), retrying...`);
-        return runQuery(retries - 1); // thử lại
+        return runQuery(retries - 1);
       }
       if (cb) return cb(err, results, fields);
     });
@@ -44,9 +53,9 @@ function getConnection(cb) {
   pool.getConnection(cb);
 }
 
-// Export giữ nguyên tên
 module.exports = {
   pool,
   query: queryWithRetry,
   getConnection
 };
+

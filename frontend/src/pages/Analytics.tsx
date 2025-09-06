@@ -494,7 +494,7 @@ const Analytics = () => {
                   setSelectedMonth(newDate);
                 }}>
                 {Array.from({ length: 5 }).map((_, i) => {
-                  const year = new Date().getFullYear() - 2 + i;
+                  const year = new Date().getFullYear() -1 + i;
                   return (
                     <option key={year} value={year}>
                       {year}

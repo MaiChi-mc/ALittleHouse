@@ -13,10 +13,24 @@ const cronJobsRouter = require('./routes/cronJobs'); // Import cron jobs
 const app = express();
 
 // Middleware
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
-app.use(express.json());
+const allowedOrigins = [ 
+  'http://localhost:5173',
+  process.env.FRONTEND_URL // URL FE trên Render  
+];
 
-// Cấu hình session
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+app.use(express.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(
 session({
     name: 'session',
@@ -35,6 +49,17 @@ app.use('/api/cron-jobs', cronJobsRouter); // Kết nối cron jobs
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
     console.log(`Server đang chạy tại http://localhost:${PORT}`);
+});
+
+// Route test kết nối DB
+app.get('/test-db', (req, res) => {
+  db.query('SELECT NOW() AS now', (err, results) => {
+    if (err) {
+      console.error('DB connection failed:', err);
+      return res.status(500).send('DB connection failed');
+    }
+    res.send(`DB connected! Server time: ${results[0].now}`);
+  });
 });
 
 

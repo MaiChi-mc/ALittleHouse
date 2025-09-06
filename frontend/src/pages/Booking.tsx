@@ -214,7 +214,7 @@ const Bookings = () => {
                 setSelectedMonth(newDate);
               }}>
               {Array.from({ length: 5 }).map((_, i) => {
-                const year = new Date().getFullYear() + i;
+                const year = new Date().getFullYear() - 1 + i;
                 return (
                   <option key={year} value={year}>
                     {year}

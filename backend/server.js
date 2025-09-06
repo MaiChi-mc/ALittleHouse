@@ -52,16 +52,5 @@ app.listen(PORT, () => {
     console.log(`Server đang chạy tại http://localhost:${PORT}`);
 });
 
-// Route test kết nối DB
-app.get("/test-db", (req, res) => {
-  db.pool.query("SELECT 1", (err, results) => {
-    if (err) {
-      console.error("❌ DB connection error:", err);
-      return res.status(500).send("DB connection failed: " + err.message);
-    }
-    res.send("✅ DB connected successfully! Result: " + JSON.stringify(results));
-  });
-});
-
 // Đây là file entry point chính của backend
 // Vai trò khởi chạy server và kết nối các middleware để phục vụ API gmail

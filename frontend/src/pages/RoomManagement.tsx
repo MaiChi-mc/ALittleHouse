@@ -18,7 +18,7 @@ const RoomManagement = () => {
   // Hàm fetchRoom
   const fetchRooms = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/auth/rooms_bookings/current");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/rooms_bookings/current`);
       const data = await response.json();
       setRooms(Array.isArray(data) ? data : []);
 
@@ -79,7 +79,7 @@ const RoomManagement = () => {
         }
       }
 
-      const response = await fetch(`http://localhost:8080/api/auth/bookings/${booking_id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/${booking_id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ field, value })
@@ -107,7 +107,7 @@ const RoomManagement = () => {
         alert("Ngày check-in và check-out phải sau ngày đặt");
         return;
       }
-      const response = await fetch("http://localhost:8080/api/auth/bookings", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newBooking)
@@ -130,7 +130,7 @@ const RoomManagement = () => {
   // Hàm thay đổi trạng thái phòng (room_status)
   const handleStatusChange = async (roomId: number, newStatus: string) => {
     try {
-      const res = await fetch(`http://localhost:8080/api/auth/${roomId}/status`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/${roomId}/status`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),

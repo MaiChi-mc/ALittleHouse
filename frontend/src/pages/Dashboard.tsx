@@ -55,9 +55,9 @@ const Dashboard = () => {
     const fetchBookings = async () => {
       try {
         const [roomsRes, bookingsRes, activityLogsRes] = await Promise.all([
-          fetch("http://localhost:8080/api/auth/rooms"),
-          fetch("http://localhost:8080/api/auth/rooms_bookings/current"),
-          fetch("http://localhost:8080/api/auth/activity-logs"),
+          fetch(`${import.meta.env.VITE_API_URL}/api/auth/rooms`),
+          fetch(`${import.meta.env.VITE_API_URL}/api/auth/rooms_bookings/current`),
+          fetch(`${import.meta.env.VITE_API_URL}/api/auth/activity-logs`),
         ]);
 
         if (!roomsRes.ok || !bookingsRes.ok || !activityLogsRes.ok) {

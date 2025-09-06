@@ -20,7 +20,7 @@ function Profile() {
     }
 
     // Gửi yêu cầu PUT để thay đổi mật khẩu
-    axios.put("http://localhost:8080/api/auth/profile", { 
+    axios.put(`${import.meta.env.VITE_API_URL}/api/auth/profile`, { 
       user_email: localStorage.getItem('email'), // Lấy email từ localStorage
       password, // Mật khẩu cũ
       newPassword // Mật khẩu mới

@@ -15,7 +15,7 @@ export default function AuthForm() {
 
   const handleLogin = async () => {
     try {
-      const response = await axios.post('http://localhost:8080/api/auth/login', {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         user_email: email,
         password,
       });
@@ -39,7 +39,7 @@ export default function AuthForm() {
   const handleForgotPassword = async () => {
     try {
       setResetMessage('');
-      await axios.post('http://localhost:8080/api/auth/forgot-password', {
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/auth/forgot-password`, {
         // API này backend nhận email (đúng như bạn viết)
         email,
         newPassword,

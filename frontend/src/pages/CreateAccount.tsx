@@ -25,7 +25,7 @@ const CreateAccount = () => {
 
     try {
       const response = await axios.post(
-        'http://localhost:8080/api/auth/create-account',
+        `${import.meta.env.VITE_API_URL}/api/auth/create-account`,
         {
           user_name,
           user_email,

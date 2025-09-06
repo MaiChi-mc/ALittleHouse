@@ -86,8 +86,8 @@ const Analytics = () => {
       try {
         setLoading(true);
         const [rRes, bRes] = await Promise.all([
-          fetch("http://localhost:8080/api/auth/rooms"),
-          fetch("http://localhost:8080/api/auth/bookings/all_with_cancelled"),
+          fetch(`${import.meta.env.VITE_API_URL}/api/auth/rooms`),
+          fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/all_with_cancelled`),
         ]);
 
         const [rData, bData] = await Promise.all([rRes.json(), bRes.json()]);
@@ -117,7 +117,7 @@ const Analytics = () => {
     const search = async () => {
       try {
         const res = await fetch(
-          `http://localhost:8080/api/auth/search?keyword=${encodeURIComponent(keyword)}`
+          `${import.meta.env.VITE_API_URL}/api/auth/search?keyword=${encodeURIComponent(keyword)}`
         );
         if (!res.ok) {
           setFilteredBookings([]);

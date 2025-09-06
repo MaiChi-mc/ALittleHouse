@@ -53,7 +53,7 @@ const Bookings = () => {
   // Fetch rooms
   const fetchRooms = async () => {
     try {
-      const response = await fetch("http://localhost:8080/api/auth/bookings/all");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/all`);
       const data = await response.json();
 
       if (Array.isArray(data)) {
@@ -104,7 +104,7 @@ const Bookings = () => {
     if (!window.confirm("Bạn có chắc chắn muốn hủy booking này?")) return;
 
     try {
-      const res = await fetch(`http://localhost:8080/api/auth/bookings/${booking_id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/${booking_id}`, {
         method: "DELETE",
       });
 
@@ -153,7 +153,7 @@ const Bookings = () => {
 
     // Gọi API một lần
     try {
-      const res = await fetch(`http://localhost:8080/api/auth/bookings/${editBookingId}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/${editBookingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newEditData),

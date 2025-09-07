@@ -1,108 +1,118 @@
-// backend/routes/gmail.js
 const express = require('express');
 const { google } = require('googleapis');
+const router = express.Router();
 require('dotenv').config();
 
-const router = express.Router();
+// Cấu hình OAuth2 client (dùng refresh_token luôn)
+const auth = new google.auth.OAuth2(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
+);
 
-function getOAuth2() {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-  );
-  // Luôn dùng refresh_token từ ENV (không phụ thuộc cookie)
-  oauth2Client.setCredentials({
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-  });
-  return oauth2Client;
-}
+auth.setCredentials({
+  refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+});
 
-router.get('/gmail/ping', (_req, res) => res.json({ ok: true }));
+const gmail = google.gmail({ version: 'v1', auth });
 
-router.get('/gmail/threads', async (req, res) => {
+// API: Lấy danh sách email từ Gmail
+router.get('/email/threads', async (req, res) => {
   try {
-    const auth = getOAuth2();
-    const gmail = google.gmail({ version: 'v1', auth });
+    const list = await gmail.users.threads.list({ userId: 'me', maxResults: 50 });
+    const threads = list.data.threads || [];
 
-    const list = await gmail.users.threads.list({
-      userId: 'me',
-      labelIds: ['INBOX'],
-      maxResults: 50,
-      q: '', // ví dụ: 'newer_than:30d'
-    });
+    const result = await Promise.all(
+      threads.map(async (thread) => {
+        const detail = await gmail.users.threads.get({ userId: 'me', id: thread.id });
 
-    const threads = await Promise.all(
-      (list.data.threads || []).map(async (t) => {
-        const full = await gmail.users.threads.get({ userId: 'me', id: t.id });
-        const messages = (full.data.messages || []).map((m) => {
-          const headers = Object.fromEntries(
-            (m.payload.headers || []).map((h) => [h.name.toLowerCase(), h.value])
-          );
-          const getBody = () => {
-            const parts = m.payload.parts || [];
-            const html = parts.find((p) => p.mimeType === 'text/html');
-            const text = parts.find((p) => p.mimeType === 'text/plain');
-            const data = html?.body?.data || text?.body?.data || m.payload?.body?.data || '';
-            return Buffer.from(data, 'base64').toString('utf8');
-          };
-          return {
-            messageId: headers['message-id'] || m.id,
-            subject: headers.subject || '',
-            from: headers.from || '',
-            replyTo: headers['reply-to'] || headers.from || '',
-            date: headers.date || '',
-            snippet: m.snippet || '',
-            body: getBody(),
-          };
+        const messages = detail.data.messages.map((msg) => {
+          const headers = msg.payload.headers;
+          const from = headers.find(h => h.name === 'From')?.value || '';
+          const subject = headers.find(h => h.name === 'Subject')?.value || '';
+          const date = headers.find(h => h.name === 'Date')?.value || '';
+          const replyTo = headers.find(h => h.name === 'Reply-To')?.value || from;
+          const messageId = headers.find(h => h.name === 'Message-ID')?.value || '';
+
+          function getBody(payload) {
+            if (payload.body?.data) {
+              return Buffer.from(payload.body.data, 'base64').toString('utf-8');
+            } else if (payload.parts?.length) {
+              return payload.parts
+                .map(part => getBody(part))
+                .join('');
+            }
+            return '';
+          }
+
+          const body = getBody(msg.payload);
+
+          return { from, replyTo, subject, date, body, messageId };
         });
-        return { id: t.id, messages };
+
+        return {
+          id: thread.id,
+          messages
+        };
       })
     );
 
-    res.json({ threads });
-  } catch (e) {
-    console.error('gmail/threads error:', e?.response?.data || e);
-    res.status(500).json({ error: 'GMAIL_THREADS_FAILED' });
+    res.json(result);
+  } catch (err) {
+    console.error(" Error fetching email threads:", err.response?.data || err.message);
+    res.status(500).json({ error: "Failed to fetch Gmail threads" });
   }
 });
 
-router.post('/gmail/send', express.json(), async (req, res) => {
+
+// API: Gửi email
+router.post('/email/send', async (req, res) => {
+  console.log(' req.body:', req.body);
+  const { to, subject, body, threadId, inReplyTo } = req.body;
+
+  if (!to || !to.includes('@')) {
+    console.error(" Invalid recipient:", to);
+    return res.status(400).send("Recipient email address is required");
+  }
+
+  // console.log(" Email will be sent to:", to);
+
+  const encodedSubject = `=?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`;
+
+  const headers = [
+  `From: me`,
+  `To: ${to}`,
+  `Subject: ${encodedSubject}`,
+  `Content-Type: text/plain; charset="UTF-8"`,
+];
+
+  if (inReplyTo) {
+    headers.push(`In-Reply-To: ${inReplyTo}`);
+    headers.push(`References: ${inReplyTo}`);
+  }
+
+  const message = [...headers, '', body].join('\n');
+  // console.log(" Raw MIME message:\n", message);
+
+  const encodedMessage = Buffer.from(message)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
   try {
-    const { to, subject, body, threadId, inReplyTo } = req.body;
-    if (!to || !subject || !body) return res.status(400).json({ error: 'MISSING_FIELDS' });
-
-    const auth = getOAuth2();
-    const gmail = google.gmail({ version: 'v1', auth });
-
-    const from = 'alittlehouse85@gmail.com'; // email của khách sạn
-    const headers = [
-      `From: ${from}`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=UTF-8',
-    ];
-    if (inReplyTo) {
-      headers.push(`In-Reply-To: ${inReplyTo}`);
-      headers.push(`References: ${inReplyTo}`);
-    }
-    const raw = `${headers.join('\r\n')}\r\n\r\n${body}`;
-    const encoded = Buffer.from(raw)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    const result = await gmail.users.messages.send({
+    await gmail.users.messages.send({
       userId: 'me',
-      requestBody: { raw: encoded, threadId },
+      requestBody: {
+        raw: encodedMessage,
+        threadId: threadId || undefined,
+      },
     });
 
-    res.json({ ok: true, id: result.data.id });
-  } catch (e) {
-    console.error('gmail/send error:', e?.response?.data || e);
-    res.status(500).json({ error: 'GMAIL_SEND_FAILED' });
+    res.json({ success: true });
+  } catch (err) {
+    // console.error(" Gmail send error:", err.response?.data || err.message);
+    res.status(500).send("Failed to send email via Gmail API");
   }
 });
 

@@ -44,7 +44,7 @@ export function useEmail() {
   const fetchThreads = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("http://localhost:8080/api/email/threads", { // gọi API tới backend tại /api/email/threads để lấy danh sách email
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/gmail/threads`, { // gọi API tới backend tại /api/email/threads để lấy danh sách email
         credentials: "include",
       });
 
@@ -92,7 +92,7 @@ export function useEmail() {
       console.log("subject:", subject);
       console.log("body:", body);
 
-      const res = await fetch("http://localhost:8080/api/email/send", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/gmail/send`, {
         method: "POST",
         credentials: "include",
         headers: {

@@ -73,7 +73,7 @@ const Messages = () => {
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [emailBody, setEmailBody] = useState("");
 
-  // Email threads từ hook (không còn mockdata)
+  // Email threads từ hook 
   const { threads: initialThreads, sendEmail } = useEmail();
   const [threads, setThreads] = useState<any[]>([]);
   const [visibleCount, setVisibleCount] = useState(10); // số lượng email hiển thị ban đầu

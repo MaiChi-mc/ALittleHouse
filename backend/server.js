@@ -14,21 +14,22 @@ const cronJobsRouter = require('./routes/cronJobs'); // Import cron jobs
 const app = express();
 
 // Middleware
-const allowedOrigins = [ 
+const allowedOrigins = [
   'http://localhost:5173',
-  process.env.FRONTEND_URL // URL FE trên Render  
+  'https://alittlehouse.netlify.app',
+  process.env.FRONTEND_URL, 
 ];
 
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    // Cho phép deploy preview của Netlify (tên miền con ngẫu nhiên)
+    if (/^https:\/\/.*\.netlify\.app$/.test(origin)) return cb(null, true);
+    cb(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
 }));
+
 
 app.use(express.json());
 app.use(bodyParser.urlencoded({ extended: true }));

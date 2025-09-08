@@ -59,11 +59,13 @@ router.get('/email/threads', async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error(" Error fetching email threads:", err.response?.data || err.message);
-    res.status(500).json({ error: "Failed to fetch Gmail threads" });
-  }
+  console.error("Error fetching email threads:", err);
+  res.status(500).json({
+    error: "Failed to fetch Gmail threads",
+    details: err.response?.data || err.message
+  });
+}
 });
-
 
 // API: Gửi email
 router.post('/email/send', async (req, res) => {

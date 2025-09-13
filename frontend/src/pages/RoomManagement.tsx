@@ -10,7 +10,7 @@ import { MoreVertical } from "lucide-react";
 
 const RoomManagement = () => {
   const userRole = localStorage.getItem('role');
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]); 
   const [editBookingId, setEditBookingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<any>({});
   const location = useLocation();
@@ -203,7 +203,7 @@ const RoomManagement = () => {
       case "Maintenance":
         return <Badge className="bg-[#DA3748]"><AlertTriangle className="h-3 w-3 mr-1" />Bảo Trì</Badge>;
       case "Cleaning":
-        return <Badge className="bg-[#bc99fe]"><Settings className="h-3 w-3 mr-1" />Đang Dọn</Badge>;
+        return <Badge className="bg-[#9167e1]"><Settings className="h-3 w-3 mr-1" />Đang Dọn</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -254,32 +254,34 @@ const RoomManagement = () => {
             </div>
           </div>
 
-          {/* Add New Booking button */}
-          <div className=" bg-[#4b9ae9] text-white rounded-full hover:bg-white hover:text-blue-500 hover:border-blue-500 hover:border focus:outline-none focus:ring-2 focus:ring-blue-500  shadow-blue-500/50 shadow-lg">
-            <Button
-              onClick={() => {
-                // -1 = "tạo booking mới" (editBookingId là number | null nên dùng -1)
-                setEditBookingId(-1);
-                setEditData({
-                  room_number: '',
-                  guest_name: '',
-                  phone_number: '',
-                  check_in: formatDateToDDMMYYYY(new Date().toISOString()),
-                  check_out: formatDateToDDMMYYYY(new Date().toISOString()),
-                  booking_date: formatDateToDDMMYYYY(new Date().toISOString()),
-                  booking_source: 'Airbnb',
-                  booking_status: 'Confirmed',
-                  amount_received: 0
-                });
-              }}
-              variant="outline"
-              className="bg-blue-500 border-blue-500 text-white rounded-full hover:bg-white
-                              hover:text-blue-500 hover:border-blue-500 shadow-blue-500/50 shadow-lg
-                              focus:outline-none focus:ring-2 focus:ring-blue-500
-              ">
-              Tạo Mới Booking
-            </Button>
-          </div>
+          {/* Add New Booking button: Ẩn nếu userRole là 'Cleaner' */}
+          {userRole !== "Cleaner" && (
+            <div className=" bg-[#4b9ae9] text-white rounded-full hover:bg-white hover:text-blue-500 hover:border-blue-500 hover:border focus:outline-none focus:ring-2 focus:ring-blue-500  shadow-blue-500/50 shadow-lg">
+              <Button
+                onClick={() => {
+                  // -1 = "tạo booking mới" (editBookingId là number | null nên dùng -1)
+                  setEditBookingId(-1);
+                  setEditData({
+                    room_number: '',
+                    guest_name: '',
+                    phone_number: '',
+                    check_in: formatDateToDDMMYYYY(new Date().toISOString()),
+                    check_out: formatDateToDDMMYYYY(new Date().toISOString()),
+                    booking_date: formatDateToDDMMYYYY(new Date().toISOString()),
+                    booking_source: 'Airbnb',
+                    booking_status: 'Confirmed',
+                    amount_received: 0
+                  });
+                }}
+                variant="outline"
+                className="bg-blue-500 border-blue-500 text-white rounded-full hover:bg-white
+                                hover:text-blue-500 hover:border-blue-500 shadow-blue-500/50 shadow-lg
+                                focus:outline-none focus:ring-2 focus:ring-blue-500
+                ">
+                Tạo Mới Booking
+              </Button>
+            </div>
+          )}
         </div>
 
 
@@ -523,12 +525,11 @@ const RoomManagement = () => {
                       </div>
                     </div>
 
-                    {room.guest_name && (
+                    {userRole !== "Cleaner" && room.guest_name && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-
                         {/* Guest name */}
                         <div>
-                          <span className="text-muted-foreground">Họ & Tên KH:</span>
+                          <span className="text-muted-foreground">Họ & Tên Khách Hàng:</span>
                           {editBookingId === room.booking_id ? (
                             <input
                               className="border rounded px-2 py-1 w-full"
@@ -539,7 +540,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{room.guest_name}</div>
                           )}
                         </div>
-
                         {/* Phone number */}
                         <div>
                           <span className="text-muted-foreground">Số Điện Thoại:</span>
@@ -553,7 +553,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{room.phone_number}</div>
                           )}
                         </div>
-
                         {/* Booking date */}
                         <div>
                           <span className="text-muted-foreground">Ngày Đặt:</span>
@@ -571,7 +570,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{formatDateToDDMMYYYY(room.booking_date)}</div>
                           )}
                         </div>
-
                         {/* Check-in */}
                         <div>
                           <span className="text-muted-foreground">Ngày Check-in:</span>
@@ -589,7 +587,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{formatDateToDDMMYYYY(room.check_in)}</div>
                           )}
                         </div>
-
                         {/* Check-out */}
                         <div>
                           <span className="text-muted-foreground">Ngày Check-out:</span>
@@ -607,7 +604,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{formatDateToDDMMYYYY(room.check_out)}</div>
                           )}
                         </div>
-
                         {/* Booking Source */}
                         <div>
                           <span className="text-muted-foreground">Nguồn Đặt:</span>
@@ -625,7 +621,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{room.booking_source}</div>
                           )}
                         </div>
-
                         {/* Booking Status */}
                         <div>
                           <span className="text-muted-foreground">Trạng Thái Booking:</span>
@@ -643,7 +638,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{room.booking_status}</div>
                           )}
                         </div>
-
                         {/* Amount received */}
                         <div>
                           <span className="text-muted-foreground">Tổng Thu Được:</span>
@@ -660,7 +654,6 @@ const RoomManagement = () => {
                             <div className="font-medium">{Number(room.amount_received ?? 0).toLocaleString("vi-VN", { minimumFractionDigits: 0 })} VND</div>
                           )}
                         </div>
-
                         {/* Nút Edit / Done */}
                         <div className="col-span-3 text-right">
                           {editBookingId === room.booking_id ? (
@@ -695,7 +688,6 @@ const RoomManagement = () => {
                         </div>
                       </div>
                     )}
-
                   </div>
                 ))}
               </div>

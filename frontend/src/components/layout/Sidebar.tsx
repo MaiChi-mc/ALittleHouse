@@ -5,29 +5,40 @@ import { cn } from "@/lib/utils";
 
 const Sidebar = ({ userRole }: { userRole: string | null }) => {
   const location = useLocation();
+  console.log('userRole =', JSON.stringify(userRole));
 
-  const navItems = [
-    { name: "Bảng Điều Khiển", path: "/", icon: Home },
-    { name: "Lịch", path: "/bookings", icon: Calendar },
-    { name: "Quản Lý Phòng", path: "/room-management", icon: Bed },
-    { name: "Tin Nhắn", path: "/messages", icon: MessageCircle },
-    { name: "Nội Quy & Giá", path: "/about", icon: Notebook },
-  ];
+const baseNav = [
+  { name: "Bảng Điều Khiển", path: "/", icon: Home },
+  { name: "Quản Lý Phòng", path: "/room-management", icon: Bed },
+];
 
-  // Nếu người dùng là admin, thêm mục "Tạo tài khoản"
-  if (userRole === 'Admin') {
-    navItems.push({
-      name: "Phân tích",
-      path: "/analytics",
-      icon: ChartBar,
-    });
-    navItems.push({
-      name: "Tạo tài khoản",
-      path: "/create-account",
-      icon: UserPlus,
-    });
-  }
+const receptionistNav = [
+  { name: "Lịch", path: "/bookings", icon: Calendar },
+  { name: "Tin Nhắn", path: "/messages", icon: MessageCircle },
+  { name: "Nội Quy & Giá Phòng", path: "/about", icon: Notebook },
+];
 
+const adminNav = [
+  { name: "Phân tích", path: "/analytics", icon: ChartBar },
+  { name: "Tạo tài khoản", path: "/create-account", icon: UserPlus },
+];
+
+// chuẩn hóa role
+const role = (userRole || '').toString().trim().toLowerCase();
+
+// Nếu ở trong React, dùng useMemo; nếu không, xài trực tiếp như bên dưới
+let navItems = [...baseNav];
+
+if (['receptionist', 'admin'].includes(role)) {
+  navItems.push(...receptionistNav);
+}
+
+if (role === 'admin') {
+  navItems.push(...adminNav);
+}
+
+
+    
   return (
     <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-gradient-to-r from-[#f0bfd3] to-[#a0c8ef]">  
       <div className="flex items-center p-4 mb-6">

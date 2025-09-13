@@ -33,7 +33,7 @@ const DICH_VU_VN = [
   { loaiDichVu: "Sấy khô quần áo", usd: "$1/1kg", vnd: "20.000đ/kg" },
   { loaiDichVu: "Thuê xe đạp", usd: "$1,5/1 ngày", vnd: "40.000đ/ngày" },
   { loaiDichVu: "Ăn sáng", usd: "$1,5/suất", vnd: "40.000đ/suất" },
-  { loaiDichVu: "Dọn phòng", usd: "$4$lần", vnd: "100.000đ/lần" },
+  { loaiDichVu: "Dọn phòng", usd: "$4/lần", vnd: "100.000đ/lần" },
 
   {
     loaiDichVu: "Phụ thu thêm người",

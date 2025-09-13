@@ -19,8 +19,8 @@ const statusConfig: Record<
 > = {
   Available: { color: "bg-[#6dabe8]", text: "Trống" },
   Occupied: { color: "bg-[#d19ab4]", text: "Có khách" },
-  Cleaning: { color: "bg-orange-500", text: "Dọn phòng" },
-  Maintenance: { color: "bg-gray-500", text: "Bảo trì" },
+  Cleaning: { color: "bg-[#9167e1]", text: "Dọn phòng" },
+  Maintenance: { color: "bg-[#DA3748]", text: "Bảo trì" },
 };
 
 // ô hiển thị phòng
@@ -160,7 +160,7 @@ const Dashboard = () => {
             b.check_in_str <= todayStr && todayStr <= b.check_out_str // so sánh theo ngày, bao gồm ngày checkout
           ));
 
-          let status: Room["status"] = "Available";
+          let status: Room["status"] = room.status;
           if (activeBooking) status = "Occupied";
 
           return { ...room, status };
@@ -301,7 +301,6 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Corridor View */}
         {/* Corridor View */}
         <Card className="shadow-xl">
           <CardHeader className="text-[#af3c6a]">

@@ -266,7 +266,7 @@ router.post('/bookings', (req, res) => {
     const checkOverlapQuery = `
       SELECT booking_id FROM bookings
       WHERE room_id = ? 
-        AND booking_status <> 'Cancelled'
+        AND LOWER(booking_status) NOT IN ('cancelled', 'canceled')
         AND (
           (check_in <= ? AND check_out >= ?)
           OR
@@ -384,6 +384,7 @@ router.put('/bookings/:booking_id', (req, res) => {
       SELECT booking_id FROM bookings
       WHERE room_id = ?
         AND booking_id <> ?
+        AND booking_status NOT IN ('Cancelled', 'Canceled')
         AND (
           (check_in <= ? AND check_out >= ?)
           OR (check_in <= ? AND check_out >= ?)

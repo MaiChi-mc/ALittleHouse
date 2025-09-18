@@ -273,6 +273,7 @@ const Bookings = () => {
               {rooms.map((room, roomIndex) => {
                 // Chuẩn bị các booking chỉ nằm trong range hiện tại và tính vị trí + span
                 const visible = (room.bookings || [])
+                  .filter((b: any) => b.booking_status?.toLowerCase() !== 'cancelled')
                   .map((b: any) => {
                     const s = new Date(b.check_in);
                     const e = new Date(b.check_out);

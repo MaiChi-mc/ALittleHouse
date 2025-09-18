@@ -26,26 +26,51 @@ router.get('/email/threads', async (req, res) => {
       threads.map(async (thread) => {
         const detail = await gmail.users.threads.get({ userId: 'me', id: thread.id });
 
+
         const messages = detail.data.messages.map((msg) => {
-          const headers = msg.payload.headers;
-          const from = headers.find(h => h.name === 'From')?.value || '';
-          const subject = headers.find(h => h.name === 'Subject')?.value || '';
+          const headers = msg.payload.headers || [];
+          const from = headers.find(h => h.name === 'From')?.value || '(Không có người gửi)';
+          // Lấy subject từ nhiều nguồn fallback
+          let subject = headers.find(h => h.name === 'Subject')?.value;
+          if (!subject || !subject.trim()) {
+            // Một số email hệ thống có thể để subject ở header khác hoặc không có
+            subject = msg.snippet || '(Không có tiêu đề)';
+          }
           const date = headers.find(h => h.name === 'Date')?.value || '';
           const replyTo = headers.find(h => h.name === 'Reply-To')?.value || from;
           const messageId = headers.find(h => h.name === 'Message-ID')?.value || '';
 
+          // Đệ quy lấy phần text/plain, nếu không có thì lấy text/html
           function getBody(payload) {
+            if (payload.parts && payload.parts.length) {
+              const plainPart = payload.parts.find(
+                part => part.mimeType === 'text/plain' && part.body?.data
+              );
+              if (plainPart) {
+                return Buffer.from(plainPart.body.data, 'base64').toString('utf-8');
+              }
+              const htmlPart = payload.parts.find(
+                part => part.mimeType === 'text/html' && part.body?.data
+              );
+              if (htmlPart) {
+                return Buffer.from(htmlPart.body.data, 'base64').toString('utf-8');
+              }
+              for (const part of payload.parts) {
+                const result = getBody(part);
+                if (result) return result;
+              }
+            }
             if (payload.body?.data) {
               return Buffer.from(payload.body.data, 'base64').toString('utf-8');
-            } else if (payload.parts?.length) {
-              return payload.parts
-                .map(part => getBody(part))
-                .join('');
             }
             return '';
           }
 
-          const body = getBody(msg.payload);
+          let body = getBody(msg.payload);
+          // Nếu không lấy được nội dung, fallback lấy subject làm nội dung
+          if (!body || !body.trim()) {
+            body = subject || 'Không có nội dung';
+          }
 
           return { from, replyTo, subject, date, body, messageId };
         });

@@ -59,38 +59,9 @@ const RoomManagement = () => {
 
   // Hàm update thông tin đặt phòng
   const handleUpdate = async (booking_id: number, field: string, value: string) => {
-    try {
-      let newEditData = { ...editData, [field]: value };
-
-      // Validation check-in / check-out
-      if (field === "check_in" || field === "check_out") {
-        const checkIn = new Date(convertDDMMYYYYtoISO(newEditData.check_in));
-        const checkOut = new Date(convertDDMMYYYYtoISO(newEditData.check_out));
-        const booking_date = new Date(convertDDMMYYYYtoISO(newEditData.booking_date));
-
-        if (checkIn && checkOut && checkOut < checkIn) {
-          alert("Ngày check-out phải sau ngày check-in");
-          return; // Không cho gọi API update
-        }
-
-        if ((checkIn && booking_date && checkIn < booking_date) || (checkOut && booking_date && checkOut < booking_date)) {
-          alert("Ngày check-in phải sau ngày đặt");
-          return; // Không cho gọi API update
-        }
-      }
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/${booking_id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ field, value })
-      });
-
-      if (!response.ok) throw new Error("Update failed");
-      const updated = await response.json();
-      setEditBookingId(null); // Close edit mode after update
-    } catch (error) {
-      console.error("Lỗi update booking FE:", error);
-    }
+    // Hàm này sẽ không dùng nữa, logic update nhiều field sẽ chuyển sang handleSaveAll
+    // Giữ lại để tránh lỗi tham chiếu, nhưng không làm gì
+    return;
   };
 
   //Hàm thêm mới đặt phòng
@@ -149,12 +120,17 @@ const RoomManagement = () => {
   // Hàm lưu tất cả các thay đổi
   const handleSaveAll = async () => {
     if (!editBookingId) return;
-    const fieldsToUpdate = Object.keys(editData);
+    // Clone object để không mutate state trực tiếp
+    const dataToSend = { ...editData };
+    // Chuyển đổi định dạng ngày
+    if (dataToSend.check_in) dataToSend.check_in = convertDDMMYYYYtoISO(dataToSend.check_in);
+    if (dataToSend.check_out) dataToSend.check_out = convertDDMMYYYYtoISO(dataToSend.check_out);
+    if (dataToSend.booking_date) dataToSend.booking_date = convertDDMMYYYYtoISO(dataToSend.booking_date);
 
     // Validation check-in / check-out trước khi update
-    const checkIn = new Date(convertDDMMYYYYtoISO(editData.check_in));
-    const checkOut = new Date(convertDDMMYYYYtoISO(editData.check_out));
-    const booking_date = new Date(convertDDMMYYYYtoISO(editData.booking_date));
+    const checkIn = new Date(dataToSend.check_in);
+    const checkOut = new Date(dataToSend.check_out);
+    const booking_date = new Date(dataToSend.booking_date);
     if (checkOut < checkIn) {
       alert("Ngày check-out phải sau ngày check-in");
       return;
@@ -164,32 +140,24 @@ const RoomManagement = () => {
       return;
     }
 
-    for (const field of fieldsToUpdate) {
-      let value = editData[field];
-
-      // Chuyển đổi định dạng ngày (nếu là ngày)
-      if (['check_in', 'check_out', 'booking_date'].includes(field)) {
-        value = convertDDMMYYYYtoISO(value);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/bookings/${editBookingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dataToSend)
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Update failed");
       }
-
-      await handleUpdate(editBookingId, field, value);
+      const updated = await response.json();
+      // Sau khi cập nhật, fetch lại danh sách phòng để đồng bộ giao diện
+      await fetchRooms();
+      setEditBookingId(null);
+      alert("Cập nhật booking thành công");
+    } catch (error: any) {
+      alert(error.message || "Lỗi update booking");
     }
-
-    // Cập nhật trực tiếp dữ liệu trong state rooms
-    setRooms(prev =>
-      prev.map(room =>
-        room.booking_id === editBookingId
-          ? {
-            ...room,
-            ...editData,
-            check_in: convertDDMMYYYYtoISO(editData.check_in),
-            check_out: convertDDMMYYYYtoISO(editData.check_out),
-            booking_date: convertDDMMYYYYtoISO(editData.booking_date)
-          }
-          : room
-      )
-    );
-    setEditBookingId(null);
     setEditData({});
   };
 
@@ -613,7 +581,7 @@ const RoomManagement = () => {
                               value={editData.booking_source || ''}
                               onChange={(e) => setEditData({ ...editData, booking_source: e.target.value })}
                             >
-                              {["Facebook", "Booking.com", "Agoda", "Airbnb", "TWalk-in", "Zalo"].map((src) => (
+                              {["Facebook", "Booking.com", "Agoda", "Airbnb", "Walk-in", "Zalo"].map((src) => (
                                 <option key={src} value={src}>{src}</option>
                               ))}
                             </select>
@@ -693,6 +661,7 @@ const RoomManagement = () => {
               </div>
             </CardContent>
           </Card>
+          
         ))}
       </div>
     </MainLayout>

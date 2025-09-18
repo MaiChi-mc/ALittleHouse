@@ -1,24 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 
 function getEmailBody(payload: any): string {
-  if (!payload) return "";
-
-  if (payload.mimeType === "text/html") {
-    return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-  }
-
-  if (payload.parts) {
-    for (const part of payload.parts) {
-      if (part.mimeType === "text/html" && part.body?.data) {
-        return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
-      }
-    }
-  }
-
-  if (payload.mimeType === "text/plain") {
-    return `<pre>${atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'))}</pre>`;
-  }
-
+  // Không dùng nữa, backend đã trả về msg.body
   return "";
 }
 
@@ -54,14 +37,14 @@ export function useEmail() {
 
       const data = await res.json();
 
+      // Lấy body trực tiếp từ backend trả về (msg.body)
       const parsedData = data.map((thread: any) => ({
         ...thread,
         messages: thread.messages.map((msg: any) => ({
           ...msg,
-          body: getEmailBody(msg.payload), // xử lý payload thành HTML text
+          body: msg.body || "",
         })),
       }));
-
       setThreads(parsedData);
 
     } catch (err: any) {

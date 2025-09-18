@@ -211,7 +211,7 @@ const Messages = () => {
                     <div className="h-10 w-10 rounded-full bg-hotel-100 flex items-center justify-center">
                       <User className="h-5 w-5 text-hotel-600" />
                     </div>
-                    <h3 className="font-medium">Email conversation</h3>
+                    <h3 className="font-medium">Gmail conversation</h3>
                   </div>
 
                   {/* Messages */}
@@ -308,7 +308,7 @@ const Messages = () => {
                 <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
                   <MessageCircle className="h-16 w-16 text-muted-foreground/30 mb-4" />
                   <h3 className="text-xl font-medium">Không có đoạn hội thoại nào</h3>
-                  <p className="text-muted-foreground max-w-md mt-2">Hãy chọn một đoạn hội thoại email.</p>
+                  <p className="text-muted-foreground max-w-md mt-2">Hãy chọn một đoạn hội thoại gmail.</p>
                 </div>
               )
             ) : (

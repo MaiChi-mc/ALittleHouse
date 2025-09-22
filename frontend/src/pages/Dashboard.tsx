@@ -84,10 +84,19 @@ const Dashboard = () => {
           return null;
         };
 
+        // Chuyển đổi về Date và ép về giờ Việt Nam (UTC+7)
         const toDateTime = (v: any) => {
           if (!v) return null;
           if (v instanceof Date) return v;
-          if (typeof v === "string") return new Date(v.replace(" ", "T"));
+          if (typeof v === "string") {
+            // Nếu có Z hoặc +00:00 thì là UTC, còn lại là local hoặc không timezone
+            let d = v.includes("T") ? new Date(v) : new Date(v.replace(" ", "T"));
+            // Nếu không có timezone, ép cộng thêm 7 tiếng (giả sử backend trả về giờ UTC)
+            if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(v)) {
+              d = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+            }
+            return d;
+          }
           return null;
         };
 

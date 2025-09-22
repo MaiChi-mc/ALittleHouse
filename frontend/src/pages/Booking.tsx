@@ -161,16 +161,21 @@ const Bookings = () => {
 
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(text || res.statusText);
+        let msg = "Có lỗi khi cập nhật booking";
+        try {
+          const errObj = JSON.parse(text);
+          if (errObj.message) msg = errObj.message;
+        } catch {}
+        throw new Error(msg);
       }
 
       alert("Cập nhật booking thành công");
       setEditBookingId(null);
       setEditData({});
       fetchRooms();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Lỗi khi cập nhật booking:", error);
-      alert("Có lỗi khi cập nhật booking");
+      alert(error.message || "Có lỗi khi cập nhật booking");
     }
   };
 

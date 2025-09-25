@@ -93,6 +93,7 @@ const Messages = () => {
     return {
       id: thread.id,
       name: first.from?.split("<")[0]?.trim() || first.from || "(No name)",
+      subject: last?.subject || first?.subject || "(No subject)",
       lastMessage: last?.snippet || "",
       time: last?.date ? new Date(last.date).toLocaleString() : "",
     };
@@ -171,6 +172,9 @@ const Messages = () => {
                             <span className="text-xs text-muted-foreground break-words">
                               {conversation.time}
                             </span>
+                            <span className="text-xs text-[#4b9ae9] break-words font-semibold">
+                              {conversation.subject}
+                            </span>
                           </div>
                           <p className="text-sm text-muted-foreground break-words mt-1">
                             {conversation.lastMessage}
@@ -224,6 +228,10 @@ const Messages = () => {
                             <div
                               className={`max-w-[70%] ${isHotel ? "bg-hotel-500 text-white" : "bg-secondary"} rounded-lg px-4 py-2 break-words`}
                             >
+                              {/* Hiển thị subject nếu có */}
+                              {message.subject && (
+                                <p className="text-xs font-semibold text-[#4b9ae9] mb-1">{message.subject}</p>
+                              )}
                               <div
                                 dangerouslySetInnerHTML={{
                                   __html: cleanEmailBody(message.body || message.subject || "(no content)"),

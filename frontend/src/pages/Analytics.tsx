@@ -272,19 +272,7 @@ const Analytics = () => {
   const channelData = useMemo(() => {
     const mStart = startOfMonth(selectedMonth.getFullYear(), monthIndex);
     const mEnd = endOfMonthExclusive(selectedMonth.getFullYear(), monthIndex);
-    const counts = new Map<string, number>();
-
-    validBookings.forEach(b => {
-      const nightsInMonth = clampRangeOverlapNights(
-        toLocalDate(b.check_in),
-        toLocalDate(b.check_out),
-        mStart, mEnd
-      );
-      if (nightsInMonth === 0) return;
-      counts.set(b.booking_source, (counts.get(b.booking_source) || 0) + nightsInMonth);
-    });
-
-    const total = Array.from(counts.values()).reduce((a, c) => a + c, 0) || 1;
+    const amountMap = new Map<string, number>();
     const colorMap: Record<string, string> = {
       "Walk-in": "#8B5CF6",
       "Booking.com": "#3B82F6",
@@ -294,9 +282,21 @@ const Analytics = () => {
       "Zalo": "#06B6D4",
     };
 
-    return Array.from(counts.entries()).map(([rawName, v]) => ({
+    validBookings.forEach(b => {
+      const nightsInMonth = clampRangeOverlapNights(
+        toLocalDate(b.check_in),
+        toLocalDate(b.check_out),
+        mStart, mEnd
+      );
+      if (nightsInMonth === 0) return;
+      // Tính tổng tiền cho từng kênh
+      const portion = (b._amount * nightsInMonth) / b._nights;
+      amountMap.set(b.booking_source, (amountMap.get(b.booking_source) || 0) + portion);
+    });
+
+    return Array.from(amountMap.entries()).map(([rawName, amount]) => ({
       name: bookingSourceMap[rawName as Booking["booking_source"]] || rawName,
-      value: Math.round((v / total) * 100), // %
+      amount: Math.round(amount),
       color: colorMap[rawName] || "#999999",
     }));
   }, [validBookings, selectedMonth.getFullYear(), monthIndex]);
@@ -413,7 +413,6 @@ const Analytics = () => {
         ADR: occupancyData[i]
           ? r.roomRevenue / Math.max(1, occupancyData[i].occupancy)
           : 0,
-        // Có thể bổ sung RevPAR nếu bạn có tính
       }))
     );
 
@@ -469,6 +468,114 @@ const Analytics = () => {
 
     // Xuất file
     XLSX.writeFile(wb, `Analytics_${year}_Thang${monthIndex + 1}.xlsx`);
+  };
+
+  // Hàm export tổng hợp cho cả năm
+  const exportYear = (
+    revenueData: any[],
+    occupancyData: any[],
+    roomTypeData: any[],
+    channelData: any[],
+    validBookings: any[],
+    selectedMonth: Date
+  ) => {
+    const year = selectedMonth.getFullYear();
+
+    // 1. KPI sheet cho 12 tháng
+    const kpiSheet = XLSX.utils.json_to_sheet(
+      revenueData.map((r, i) => ({
+        Năm: year,
+        Tháng: r.month,
+        DoanhThu: r.revenue,
+        DoanhThuPhòng: r.roomRevenue,
+        Occupancy: occupancyData[i]?.occupancy ?? 0,
+        ADR: occupancyData[i]
+          ? r.roomRevenue / Math.max(1, occupancyData[i].occupancy)
+          : 0,
+      }))
+    );
+
+    // 2. Doanh thu theo loại phòng cho từng tháng
+    const roomTypeSheet = XLSX.utils.json_to_sheet(
+      Array.from({ length: 12 }, (_, monthIndex) => {
+        const mStart = new Date(year, monthIndex, 1);
+        const mEnd = new Date(year, monthIndex + 1, 1);
+        // Tính tổng doanh thu từng loại phòng trong tháng
+        const typeSum = { A: 0, B: 0, C: 0 } as Record<"A" | "B" | "C", number>;
+        validBookings.forEach(b => {
+          const r = (b as any)._room as Room | null;
+          if (!r) return;
+          const nightsInMonth = clampRangeOverlapNights(
+            toLocalDate(b.check_in),
+            toLocalDate(b.check_out),
+            mStart, mEnd
+          );
+          if (nightsInMonth === 0) return;
+          const portion = ((b as any)._amount * nightsInMonth) / (b as any)._nights;
+          typeSum[r.room_type] += portion;
+        });
+        return [
+          { Năm: year, Tháng: monthIndex + 1, LoạiPhòng: "A", DoanhThu: Math.round(typeSum.A) },
+          { Năm: year, Tháng: monthIndex + 1, LoạiPhòng: "B", DoanhThu: Math.round(typeSum.B) },
+          { Năm: year, Tháng: monthIndex + 1, LoạiPhòng: "C", DoanhThu: Math.round(typeSum.C) },
+        ];
+      }).flat()
+    );
+
+    // 3. Doanh thu theo kênh đặt phòng cho từng tháng
+    const channelSheet = XLSX.utils.json_to_sheet(
+      Array.from({ length: 12 }, (_, monthIndex) => {
+        const mStart = new Date(year, monthIndex, 1);
+        const mEnd = new Date(year, monthIndex + 1, 1);
+        const counts = new Map<string, number>();
+        validBookings.forEach(b => {
+          const nightsInMonth = clampRangeOverlapNights(
+            toLocalDate(b.check_in),
+            toLocalDate(b.check_out),
+            mStart, mEnd
+          );
+          if (nightsInMonth === 0) return;
+          counts.set(b.booking_source, (counts.get(b.booking_source) || 0) + nightsInMonth);
+        });
+        const total = Array.from(counts.values()).reduce((a, c) => a + c, 0) || 1;
+        return Array.from(counts.entries()).map(([rawName, v]) => ({
+          Năm: year,
+          Tháng: monthIndex + 1,
+          Kênh: bookingSourceMap[rawName as Booking["booking_source"]] || rawName,
+          TỷTrọng: Math.round((v / total) * 100) + "%",
+        }));
+      }).flat()
+    );
+
+    // 4. Booking chi tiết cho cả năm
+    const bookingsSheet = XLSX.utils.json_to_sheet(
+      validBookings
+        .filter(b => {
+          const ci = new Date(b.check_in);
+          return ci.getFullYear() === year;
+        })
+        .map(b => ({
+          BookingID: b.booking_id,
+          Khách: b.guest_name,
+          Phòng: b._room?.room_number,
+          LoạiPhòng: b._room?.room_type,
+          CheckIn: b.check_in,
+          CheckOut: b.check_out,
+          SốĐêm: b._nights,
+          SốTiền: b._amount,
+          Kênh: b.booking_source,
+        }))
+    );
+
+    // Gom vào workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, kpiSheet, "KPI Tổng quan");
+    XLSX.utils.book_append_sheet(wb, roomTypeSheet, "Theo loại phòng");
+    XLSX.utils.book_append_sheet(wb, channelSheet, "Theo kênh");
+    XLSX.utils.book_append_sheet(wb, bookingsSheet, "Booking chi tiết");
+
+    // Xuất file
+    XLSX.writeFile(wb, `Analytics_${year}_TongHop.xlsx`);
   };
 
   return (
@@ -539,6 +646,21 @@ const Analytics = () => {
           )}
         >
           Xuất File tháng này
+        </Button>
+
+        <Button
+          variant="outline"
+          className="text-white bg-green-600 hover:text-green-600 hover:bg-white hover:border-green-600"
+          onClick={() => exportYear(
+            revenueData,
+            occupancyData,
+            roomTypeData,
+            channelData,
+            validBookings,
+            selectedMonth
+          )}
+        >
+          Xuất File tổng hợp năm
         </Button>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -726,7 +848,7 @@ const Analytics = () => {
             <Card className="shadow-xl">
               <CardHeader>
                 <CardTitle>Kênh đặt phòng</CardTitle>
-                <CardDescription>Tỷ trọng (%) theo kênh trong tháng</CardDescription>
+                <CardDescription>Tổng tiền theo từng kênh trong tháng</CardDescription>
               </CardHeader>
               <CardContent>
                 <ChartContainer config={chartConfig} className="h-96">
@@ -736,10 +858,15 @@ const Analytics = () => {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}%`}
+                      label={({ name, amount }) => {
+                        // Tính tổng tiền để ra %
+                        const total = channelData.reduce((sum, c) => sum + c.amount, 0) || 1;
+                        const percent = ((amount / total) * 100).toFixed(0);
+                        return `${name}: ${percent}%`;
+                      }}
                       outerRadius={120}
                       fill="#8884d8"
-                      dataKey="value"
+                      dataKey="amount"
                     >
                       {channelData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -753,7 +880,7 @@ const Analytics = () => {
                     <Card key={i} className="bg-muted/50">
                       <CardContent className="p-4 text-center">
                         <p className="text-xs text-muted-foreground">{item.name}</p>
-                        <p className="text-lg font-medium mt-1">{item.value}%</p>
+                        <p className="text-lg font-medium mt-1">{item.amount.toLocaleString('vi-VN')} VND</p>
                       </CardContent>
                     </Card>
                   ))}

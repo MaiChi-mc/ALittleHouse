@@ -40,9 +40,9 @@ if (role === 'admin') {
 
     
   return (
-    <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-gradient-to-r from-[#f0bfd3] to-[#a0c8ef]">  
+    <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-[#6aa6e2]">  
       <div className="flex items-center p-4 mb-6">
-        <Link to="/" className="text-[#af3c6a] font-bold text-3xl">
+        <Link to="/" className="text-[#fff1f5] font-bold text-3xl">
           A Little House
         </Link>
       </div>
@@ -58,7 +58,7 @@ if (role === 'admin') {
               to={item.path}
               className={cn(
                 "flex items-center gap-3 px-3 py-2 my-1 rounded-md transition-colors whitespace-nowrap relative",
-                isActive ? "bg-[#80b6ec]  text-[#af3c6a] font-bold" : "text-[#cb5f8a] hover:bg-[#6dabe8] hover:text-white hover:shadow-lg",
+                isActive ? "bg-[#c6e0f8]  text-[#af3c6a] font-bold" : "text-[#ffeef5] hover:bg-[#a0cdf8] hover:text-white hover:shadow-lg",
               )}
             >
               <item.icon size={20} />

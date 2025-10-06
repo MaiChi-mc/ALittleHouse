@@ -57,13 +57,6 @@ const RoomManagement = () => {
     fetchRooms();
   }, [location]);
 
-  // Hàm update thông tin đặt phòng
-  const handleUpdate = async (booking_id: number, field: string, value: string) => {
-    // Hàm này sẽ không dùng nữa, logic update nhiều field sẽ chuyển sang handleSaveAll
-    // Giữ lại để tránh lỗi tham chiếu, nhưng không làm gì
-    return;
-  };
-
   //Hàm thêm mới đặt phòng
   const handleAddBooking = async (newBooking: any) => {
     try {
@@ -74,7 +67,7 @@ const RoomManagement = () => {
         alert("Ngày check-out phải sau ngày check-in");
         return;
       }
-      if ((checkIn < booking_date) || (checkOut < booking_date)) {
+      if ((checkIn < booking_date) || (checkOut <= booking_date)) {
         alert("Ngày check-in và check-out phải sau ngày đặt");
         return;
       }
@@ -135,7 +128,7 @@ const RoomManagement = () => {
       alert("Ngày check-out phải sau ngày check-in");
       return;
     }
-    if ((checkIn < booking_date) || (checkOut < booking_date)) {
+    if ((checkIn < booking_date) || (checkOut <= booking_date)) {
       alert("Ngày check-in và check-out phải sau ngày đặt");
       return;
     }
@@ -266,13 +259,18 @@ const RoomManagement = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 ">
                 <div className="text-[#af3c6a]">Tên Phòng
-                  <input
-                    type="text"
-                    placeholder="Tên Phòng"
+                  <select
                     className="border p-2 w-full rounded-xl text-blue"
                     value={editData.room_number || ''}
                     onChange={(e) => setEditData({ ...editData, room_number: e.target.value })}
-                  />
+                  >
+                    <option value="">Chọn phòng...</option>
+                    {rooms.map(room => (
+                      <option key={room.room_number} value={room.room_number}>
+                        {room.room_number} - {room.room_name || room.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="text-[#af3c6a]">Họ & Tên KH

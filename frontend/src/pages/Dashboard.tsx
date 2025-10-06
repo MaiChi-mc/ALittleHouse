@@ -17,10 +17,21 @@ const statusConfig: Record<
   Room["status"],
   { color: string; text: string }
 > = {
-  Available: { color: "bg-[#6dabe8]", text: "Trống" },
-  Occupied: { color: "bg-[#d19ab4]", text: "Có khách" },
-  Cleaning: { color: "bg-[#9167e1]", text: "Dọn phòng" },
+  Available: { color: "bg-[#6dabe8]", text: "Còn trống" },
+  Occupied: { color: "bg-[#d19ab4]", text: "Đang ở" },
+  Cleaning: { color: "bg-[#9167e1]", text: "Đang dọn" },
   Maintenance: { color: "bg-[#DA3748]", text: "Bảo trì" },
+};
+
+// Helper lấy màu status
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case "Available": return "#6dabe8";
+    case "Occupied": return "#d19ab4";
+    case "Cleaning": return "#9167e1";
+    case "Maintenance": return "#DA3748";
+    default: return "#999";
+  }
 };
 
 // ô hiển thị phòng
@@ -50,6 +61,13 @@ const Dashboard = () => {
   // Vẫn dùng để render phần đang thấy
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [visibleCount, setVisibleCount] = useState(5);
+  // Số lượng hiển thị cho từng loại hành động
+  const [visibleByType, setVisibleByType] = useState<{[key: string]: number}>({
+    "Tạo đặt phòng": 2,
+    "Cập nhật đặt phòng": 2,
+    "Hủy đặt phòng": 2,
+    "Cập nhật trạng thái phòng": 2,
+  });
  
   useEffect(() => {
     const fetchBookings = async () => {
@@ -106,28 +124,26 @@ const Dashboard = () => {
           .sort((a, b) => new Date(b.performed_at).getTime() - new Date(a.performed_at).getTime())
           .map((log) => {
             const timeValue = toDateTime(log.performed_at);
-
             const text = (log?.description ?? "").trim() || "—";
-
             const user = log.user_name
               ? log.booking_source
                 ? `${log.booking_source} + ${log.user_name} `
                 : log.user_name
               : log.performed_by || "System";
-
             return {
               time: timeValue
                 ? timeValue.toLocaleString("vi-VN", {
-                  year: "numeric",
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
                 : "N/A",
-              text,                 // <- text = description
-              description: text,    
+              text,
+              description: text,
               user,
+              action_type: log.action_type, // Thêm dòng này để lọc đúng loại hành động
             };
           });
 
@@ -186,8 +202,8 @@ const Dashboard = () => {
 
   // Khi visibleCount hoặc allActivities thay đổi
   useEffect(() => {
-    setRecentActivities(allActivities.slice(0, visibleCount));
-  }, [allActivities, visibleCount]);
+    setRecentActivities(allActivities);
+  }, [allActivities]);
 
   // group theo floor
   const floors = Array.from(new Set(rooms.map((r) => r.floor))).sort();
@@ -196,41 +212,89 @@ const Dashboard = () => {
   return (
     <MainLayout userRole={userRole}>
       <div className="space-y-6">
-        {/* Recent Activities */}
-        <Card className="shadow-lg">
-          <CardHeader className="text-[#af3c6a]">
-            <CardTitle>Hoạt động gần đây</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivities.length > 0 ? (
-                recentActivities.map((item, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="h-2 w-2 mt-2 rounded-full bg-[#af3c6a]"></div>
-                    <div>
-                      <p className="text-sm">{item.description || item.text}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-xs text-muted-foreground">{item.time}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">Không có hoạt động gần đây</p>
-              )}
-
-              {visibleCount < allActivities.length && (
-                <>
-                  <hr />
-                  <Button onClick={() => setVisibleCount((prev) => prev + 5)} variant="outline"
-                    className="text-white bg-[#d19ab4] hover:text-[#af3c6a] hover:bg-white hover:border-[#d19ab4]">
-                    Xem thêm hoạt động
-                  </Button>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        {/* Tiêu đề cho 4 card hoạt động */}
+        <div className="mb-2">
+          <h3 className="text-2xl font-extrabold bg-gradient-to-r from-[#c92974] to-[#6dabe8] bg-clip-text text-transparent tracking-wide flex items-center gap-2">
+            Hoạt động gần đây
+          </h3>
+        </div>
+        {/* Recent Activities - 4 card chia theo loại hành động */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            "Tạo đặt phòng",
+            "Cập nhật đặt phòng",
+            "Hủy đặt phòng",
+            "Cập nhật trạng thái phòng",
+          ].map((type) => {
+            const filtered = recentActivities.filter(a => a.action_type === type);
+            return (
+              <Card key={type} className="shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle className="text-lg text-center font-bold text-[#750338]">{type}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {filtered.length > 0 ? (
+                    filtered.slice(0, visibleByType[type] || 5).map((item, i) => {
+                      // Nếu là card cập nhật trạng thái phòng, highlight status
+                                    if (type === "Cập nhật trạng thái phòng") {
+                                      // Chuyển đổi trạng thái tiếng Anh sang tiếng Việt trong mô tả
+                                      const statusEnToVi: Record<string, string> = {
+                                        "Available": "Còn trống",
+                                        "Occupied": "Đang ở",
+                                        "Cleaning": "Đang dọn",
+                                        "Maintenance": "Bảo trì"
+                                      };
+                                      let desc = item.description || item.text;
+                                      desc = desc.replace(/(Available|Occupied|Cleaning|Maintenance)/g, (m) => statusEnToVi[m] || m);
+                                      // Tìm màu cho trạng thái mới
+                                      const statusMatch = /(Còn trống|Đang ở|Đang dọn|Bảo trì)/.exec(desc);
+                                      let statusColor = "#999";
+                                      if (statusMatch) {
+                                        switch (statusMatch[1]) {
+                                          case "Còn trống": statusColor = "#6dabe8"; break;
+                                          case "Đang ở": statusColor = "#d19ab4"; break;
+                                          case "Đang dọn": statusColor = "#9167e1"; break;
+                                          case "Bảo trì": statusColor = "#DA3748"; break;
+                                          default: statusColor = "#999";
+                                        }
+                                      }
+                                      return (
+                                        <div key={i} className="rounded-lg border bg-white p-3 flex items-center gap-2">
+                                          <div
+                                            className="w-3 h-3 rounded-full"
+                                            style={{ backgroundColor: statusColor }}
+                                          ></div>
+                                          <div className="flex-1">
+                                            <div className="font-medium">{desc}</div>
+                                            <div className="text-xs text-muted-foreground mt-1">{item.time}</div>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
+                      // Các card khác giữ nguyên
+                      return (
+                        <div key={i} className="rounded-lg border bg-white p-3">
+                          <div className="font-medium">{item.description || item.text}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{item.time}</div>
+                        </div>
+                      );
+                    })
+                  ) : <div className="text-s text-muted-foreground text-center">Không có hoạt động gần đây</div>}
+                  {filtered.length > (visibleByType[type] || 2) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full bg-[#c92974] text-white hover:bg-white hover:text-[#da4c8e]"
+                      onClick={() => setVisibleByType(v => ({ ...v, [type]: v[type] + 2 }))}
+                    >
+                      Xem thêm hoạt động
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
         {/* Today's Check-ins & Check-outs */}
         <div className="grid gap-6 md:grid-cols-2 ">

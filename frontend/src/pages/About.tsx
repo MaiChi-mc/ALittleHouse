@@ -120,6 +120,7 @@ const formatVND = (n: number) => n.toLocaleString("vi-VN", { minimumFractionDigi
 export default function AboutUs() {
   const userRole = typeof window !== 'undefined' ? localStorage.getItem('role') : undefined;
   const [language, setLanguage] = useState<'VN' | 'EN'>('VN');
+  const [copied, setCopied] = useState<string>("");
 
   const toggleLang = () => setLanguage(language === 'VN' ? 'EN' : 'VN');
 
@@ -130,6 +131,33 @@ export default function AboutUs() {
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  // Hàm copy nội dung
+  const handleCopy = async (type: string) => {
+    let text = "";
+    if (type === "rules") {
+      text = NOI_QUY.join("\n");
+    } else if (type === "room") {
+      text = GIA_PHONG.map(r => `${r.loaiPhong}: ${language === 'VN' ? `Ngày: ${formatVND(r.ngayVND)}, Tháng: ${formatVND(r.thangVND)}` : `Per Night: $${r.ngayUSD}, Per Month: $${r.thangUSD}`}`).join("\n");
+    } else if (type === "service") {
+      text = DICH_VU.map(row => {
+        if (row.options) {
+          return `${row.loaiDichVu}:\n` + row.options.map(opt => `${opt.doiTuong || opt.dieuKien}: ${opt.usd} | ${opt.vnd}`).join("\n");
+        } else {
+          return `${row.loaiDichVu}: ${row.usd} | ${row.vnd}`;
+        }
+      }).join("\n");
+    } else if (type === "promo") {
+      text = UU_DAI.map(ud => `${ud.tieuDe}: ${ud.moTa}`).join("\n");
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      setCopied("");
+    }
   };
 
   return (
@@ -179,10 +207,11 @@ export default function AboutUs() {
 
         {/* Nội quy */}
         <Card id="noi-quy" className="shadow-xl border-l-4 border-[#af3c6a]">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-2xl text-[#af3c6a]">
               {language === 'VN' ? 'Nội quy' : 'House Rules'}
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => handleCopy("rules")}>{copied === "rules" ? "Đã copy" : "Copy"}</Button>
           </CardHeader>
           <CardContent>
             <ul className="list-disc pl-6 space-y-2 leading-relaxed">
@@ -195,10 +224,11 @@ export default function AboutUs() {
 
         {/* Giá phòng */}
         <Card id="gia-phong" className="shadow-xl border-l-4 border-blue-500">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-2xl text-blue-600">
               {language === 'VN' ? 'Giá phòng' : 'Room Rates'}
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => handleCopy("room")}>{copied === "room" ? "Đã copy" : "Copy"}</Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto rounded-lg border">
@@ -230,10 +260,11 @@ export default function AboutUs() {
 
         {/* Dịch vụ */}
         <Card id="dich-vu" className="shadow-xl border-l-4 border-purple-500">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-2xl text-purple-600">
               {language === 'VN' ? 'Dịch vụ có thu phí' : 'Extra Services'}
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => handleCopy("service")}>{copied === "service" ? "Đã copy" : "Copy"}</Button>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto rounded-lg border">
@@ -276,10 +307,11 @@ export default function AboutUs() {
 
         {/* Ưu đãi */}
         <Card id="uu-dai" className="shadow-xl border-l-4 border-green-500">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-2xl text-green-600">
               {language === 'VN' ? 'Ưu đãi' : 'Promotions'}
             </CardTitle>
+            <Button size="sm" variant="outline" onClick={() => handleCopy("promo")}>{copied === "promo" ? "Đã copy" : "Copy"}</Button>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

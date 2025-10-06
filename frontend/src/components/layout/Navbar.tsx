@@ -37,7 +37,7 @@ const Navbar = () => {
   return (
     <header className="border-b bg-white py-4 px-6 flex justify-between items-center">
       <div>
-        <h1 className="text-xl font-semibold text-[#3a80c6]">
+        <h1 className="text-xl font-bold text-[#004c97]">
           Chào mừng đến A Little House
         </h1>
         <p className="text-sm text-[#6e9bc7]">Quản lý khách sạn dễ dàng</p>

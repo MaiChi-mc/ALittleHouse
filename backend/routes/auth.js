@@ -252,7 +252,7 @@ router.post('/bookings', (req, res) => {
     return res.status(400).json({ error: "Ngày check-out phải lớn hơn ngày check-in" });
   }
 
-  if (new Date(check_in) < new Date(booking_date) || new Date(check_out) < new Date(booking_date)) {
+  if (new Date(check_in) < new Date(booking_date) || new Date(check_out) <= new Date(booking_date)) {
     return res.status(400).json({ error: "Ngày check-in và check-out phải lớn hơn ngày đặt" });
   }
 
@@ -375,7 +375,7 @@ router.put('/bookings/:booking_id', (req, res) => {
     if (new Date(newCheckOut) < new Date(newCheckIn)) {
       return res.status(400).json({ error: "Ngày check-out phải lớn hơn ngày check-in" });
     }
-    if (new Date(newCheckIn) < new Date(booking.booking_date) || new Date(newCheckOut) < new Date(booking.booking_date)) {
+    if (new Date(newCheckIn) < new Date(booking.booking_date) || new Date(newCheckOut) <= new Date(booking.booking_date)) {
       return res.status(400).json({ error: "Ngày check-in và check-out phải lớn hơn ngày đặt" });
     }
 

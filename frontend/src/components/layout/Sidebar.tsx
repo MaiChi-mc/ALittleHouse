@@ -40,7 +40,7 @@ if (role === 'admin') {
 
     
   return (
-    <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-[#6aa6e2]">  
+    <div className="bg-sidebar h-screen w-[250px] shadow-xl bg-[#6da8e3]">  
       <div className="flex items-center p-4 mb-6">
         <Link to="/" className="text-[#fff1f5] font-bold text-3xl">
           A Little House
